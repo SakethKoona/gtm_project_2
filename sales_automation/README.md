@@ -98,6 +98,44 @@ src/
 scripts/                  seed-suppression.ts, sample-leads.csv
 ```
 
+## Lead Pipeline
+
+`/pipeline` (Rep nav) tracks every generated lead through a stage
+(`new → contacted → follow_up → qualified → won | lost | do_not_contact`) and
+turns each call into documentation. Left pane: filterable/searchable lead table.
+Right pane: a per-lead **activity timeline** rendered as chat bubbles
+(rep/outcome bubbles right-aligned, dialer/system bubbles left, stage changes as
+centered dividers) with a **composer** — prefilled outcome-template chips plus a
+free-text note. Templates that suggest a follow-up reveal an inline scheduler
+(call/email, quick date presets). A **follow-up queue** lists pending items by
+due date, overdue highlighted, with Done / Snooze / Open-lead actions.
+
+- **Routes:** `GET/POST /api/leads`, `GET/PATCH /api/leads/[id]`,
+  `POST /api/leads/[id]/activity` (log outcome + optional follow-up),
+  `GET /api/followups`, `PATCH /api/followups/[id]` (done | canceled | snooze).
+  Business logic lives in `src/lib/pipeline/{service,ledger}.ts`; routes are thin.
+- **Tables** (migration `0004`): `lead_activities` (timeline bubbles),
+  `follow_ups` (due queue), `contact_ledger` (dedupe log), plus
+  `leads.pipeline_stage`. Outcome vocab is `OUTCOME_TEMPLATES` in
+  `src/lib/config.ts`; the `do_not_call` template also calls `recordOptOut()`.
+
+### Contact ledger (the persistent found/called log)
+
+`contact_ledger` is a permanent, cross-session record keyed by E.164 phone, so a
+number is never re-found on ingest nor accidentally re-dialed — surviving even if
+the original lead row is later quarantined or deleted.
+
+- **Found-side (ingest):** `validateBatch` marks a row `duplicate` when its phone
+  is already in the ledger; `commitBatch` upserts a ledger row for every eligible
+  inserted lead (`onConflictDoNothing`).
+- **Called-side (pre-dial):** `checkDialable` denies `already_contacted`
+  (`already_called`) when `callCount > 0` for the phone — **unless** the lead has
+  a `pending` `call` follow-up due now. The follow-up queue is the only
+  sanctioned re-dial path.
+- **Called write:** the dialer records the ledger at guaranteed dial-release
+  (`engine.ts`); manual console calls record on their insert path. A completing
+  call against a pending call follow-up marks that follow-up `done`.
+
 ## DB scripts
 
 ```bash
