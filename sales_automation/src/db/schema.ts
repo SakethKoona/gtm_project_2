@@ -69,6 +69,20 @@ export const callStateEnum = pgEnum("call_state", [
 export const repPresenceEnum = pgEnum("rep_presence", ["available", "away"]);
 
 /**
+ * pipeline_stage — where a lead sits in the sales pipeline. Every lead starts
+ * `new`; reps advance it via outcome logging / manual stage changes.
+ */
+export const pipelineStageEnum = pgEnum("pipeline_stage", [
+  "new",
+  "contacted",
+  "follow_up",
+  "qualified",
+  "won",
+  "lost",
+  "do_not_contact",
+]);
+
+/**
  * ingestion_batches — one row per upload. Holds the summary counts shown on the
  * pre-import report and the column mapping actually used for this batch.
  */
@@ -119,6 +133,9 @@ export const leads = pgTable(
     campaignId: uuid("campaign_id"),
     lastContacted: timestamp("last_contacted", { withTimezone: true }),
     disposition: text("disposition"),
+    pipelineStage: pipelineStageEnum("pipeline_stage")
+      .notNull()
+      .default("new"),
     ingestionBatchId: uuid("ingestion_batch_id").references(
       () => ingestionBatches.id,
     ),
@@ -135,6 +152,7 @@ export const leads = pgTable(
       .where(sql`validation_status = 'eligible'`),
     index("leads_batch_idx").on(t.ingestionBatchId),
     index("leads_validation_status_idx").on(t.validationStatus),
+    index("leads_pipeline_stage_idx").on(t.pipelineStage),
   ],
 );
 
@@ -305,4 +323,101 @@ export const ivrMenuMaps = pgTable(
   (t) => [
     uniqueIndex("ivr_map_uniq").on(t.destination, t.promptFingerprint, t.digit),
   ],
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipeline : lead activity timeline, follow-up queue, persistent contact ledger
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Kind of a lead-timeline entry — drives how the chat bubble renders. */
+export const activityKindEnum = pgEnum("activity_kind", [
+  "outcome",
+  "note",
+  "stage_change",
+  "followup",
+  "system",
+]);
+
+/**
+ * lead_activities — append-only per-lead timeline rendered as chat bubbles.
+ * Sourced from rep outcome logging, notes, stage changes, follow-up events, and
+ * dialer system entries.
+ */
+export const leadActivities = pgTable(
+  "lead_activities",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id),
+    callAttemptId: uuid("call_attempt_id"),
+    repId: uuid("rep_id"),
+    kind: activityKindEnum("kind").notNull(),
+    templateKey: text("template_key"), // OUTCOME_TEMPLATES key, null for custom
+    body: text("body").notNull(), // the bubble text
+    meta: jsonb("meta").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("lead_activities_lead_idx").on(t.leadId, t.createdAt)],
+);
+
+/** Channel for a follow-up — call the number again, or email someone. */
+export const followUpChannelEnum = pgEnum("follow_up_channel", ["call", "email"]);
+
+/** Lifecycle of a follow-up in the due queue. */
+export const followUpStatusEnum = pgEnum("follow_up_status", [
+  "pending",
+  "done",
+  "canceled",
+]);
+
+/**
+ * follow_ups — the due queue. A `pending` `call` follow-up whose `dueAt` has
+ * passed is the sanctioned re-dial path past the contact-ledger dedupe gate.
+ */
+export const followUps = pgTable(
+  "follow_ups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id),
+    campaignId: uuid("campaign_id"),
+    repId: uuid("rep_id"),
+    channel: followUpChannelEnum("channel").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    note: text("note"), // for email: who/what to email
+    status: followUpStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("follow_ups_status_due_idx").on(t.status, t.dueAt),
+    index("follow_ups_lead_idx").on(t.leadId),
+  ],
+);
+
+/**
+ * contact_ledger — THE persistent found/called log. Keyed by phone (E.164) so
+ * duplicate numbers are never re-found (ingest) or re-called (dial) across
+ * sessions, even if the originating lead row is later quarantined/deleted.
+ */
+export const contactLedger = pgTable(
+  "contact_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    phone: text("phone").notNull(), // E.164
+    leadId: uuid("lead_id"), // first lead that claimed this phone
+    firstFoundAt: timestamp("first_found_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    firstCalledAt: timestamp("first_called_at", { withTimezone: true }),
+    lastCalledAt: timestamp("last_called_at", { withTimezone: true }),
+    callCount: integer("call_count").notNull().default(0),
+  },
+  (t) => [uniqueIndex("contact_ledger_phone_uniq").on(t.phone)],
 );
