@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Headphones, LayoutDashboard, Upload } from "lucide-react";
+import { GitBranch, Headphones, LayoutDashboard, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/console", label: "Call Console", icon: Headphones, section: "Rep" },
+  { href: "/pipeline", label: "Pipeline", icon: GitBranch, section: "Rep" },
   { href: "/dashboard", label: "Dialer Dashboard", icon: LayoutDashboard, section: "Admin" },
   { href: "/", label: "Leads / Ingestion", icon: Upload, section: "Admin" },
 ];
