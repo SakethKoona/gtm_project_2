@@ -2,8 +2,26 @@ import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts } from "@/db/schema";
+import {
+  logOutcome,
+  completePendingCallFollowUps,
+} from "@/lib/pipeline/service";
+import { recordCalled } from "@/lib/pipeline/ledger";
+import { OUTCOME_TEMPLATES } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Rep disposition → outcome template (design §6). "other" has no template and
+ * becomes a custom note-only outcome (falls through to undefined).
+ */
+const DISPOSITION_TO_TEMPLATE: Record<string, string> = {
+  booked: "meeting",
+  callback: "callback",
+  not_interested: "not_interested",
+  wrong_number: "wrong_number",
+  no_contact: "no_answer",
+};
 
 type Timeline = { state: string; at: string }[] | null;
 
@@ -123,6 +141,47 @@ export async function POST(request: Request) {
         endedAt: b.endedAt ? new Date(b.endedAt) : new Date(),
       })
       .returning();
+  }
+
+  // ── Pipeline integration (design §6) ──────────────────────────────────────
+  // Manual console call → record a "called" write in the persistent ledger so
+  // the number is never re-dialed accidentally. Dialer calls already record on
+  // dial-release (engine.ts).
+  if (!existing && b.phone) {
+    await recordCalled(b.phone, b.leadId ?? undefined);
+  }
+
+  const leadId = b.leadId;
+  if (leadId && saved) {
+    // A completed call satisfies any pending call follow-up for this lead. Do
+    // this BEFORE logOutcome so a new callback follow-up it may create is not
+    // itself immediately marked done.
+    await completePendingCallFollowUps(leadId);
+
+    // Map the rep disposition → outcome template and log it to the lead timeline.
+    const disp = b.disposition ?? null;
+    const templateKey = disp ? DISPOSITION_TO_TEMPLATE[disp] : undefined;
+    const template = templateKey
+      ? OUTCOME_TEMPLATES.find((t) => t.key === templateKey)
+      : undefined;
+    const note = b.note?.trim();
+    const body = note || template?.body || "Call logged from console.";
+    // Callback disposition auto-schedules a call follow-up +24h (design §6).
+    const followUp =
+      disp === "callback"
+        ? {
+            channel: "call" as const,
+            dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            note: "Callback requested from console",
+          }
+        : undefined;
+    await logOutcome(leadId, {
+      templateKey: template?.key,
+      body,
+      repId: b.repId,
+      callAttemptId: saved.id,
+      followUp,
+    });
   }
 
   // Optional server-side Google Sheets append (auto-log). See SHEETS_SETUP.md.
