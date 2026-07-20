@@ -10,6 +10,7 @@ import { normalizePhone } from "./phone";
 import { timezoneForAreaCode } from "./timezone";
 import { getDncScrubber, checkInternalSuppression } from "./dnc";
 import { classifyConsent, isCallableBasisType } from "./consent";
+import { phonesInLedger, recordFound } from "@/lib/pipeline/ledger";
 import type {
   ColumnMapping,
   RowResult,
@@ -79,10 +80,11 @@ export async function validateBatch(
     new Set(drafts.filter((d) => d.phoneE164).map((d) => d.phoneE164 as string)),
   );
   const scrubber = getDncScrubber();
-  const [dncMap, suppressed, existingEligible] = await Promise.all([
+  const [dncMap, suppressed, existingEligible, ledgerPhones] = await Promise.all([
     scrubber.scrub(validPhones),
     checkInternalSuppression(validPhones),
     existingEligiblePhones(validPhones),
+    phonesInLedger(validPhones),
   ]);
 
   // Second pass: assign a single status per row via a fixed precedence.
@@ -114,13 +116,17 @@ export async function validateBatch(
         : "missing consent basis";
     } else if (
       seenInFile.has(d.phoneE164) ||
-      existingEligible.has(d.phoneE164)
+      existingEligible.has(d.phoneE164) ||
+      ledgerPhones.has(d.phoneE164)
     ) {
-      // 4. duplicate — already in this file or already an eligible lead.
+      // 4. duplicate — already in this file, already an eligible lead, or already
+      // in the persistent contact ledger (found/called in an earlier session).
       status = "duplicate";
       reason = existingEligible.has(d.phoneE164)
         ? "duplicate: already an eligible lead"
-        : "duplicate within uploaded file";
+        : ledgerPhones.has(d.phoneE164)
+          ? "phone already in contact ledger"
+          : "duplicate within uploaded file";
     } else {
       // 5. eligible — passed every check.
       status = "eligible";
@@ -217,27 +223,42 @@ export async function commitBatch(params: {
       .returning({ id: ingestionBatches.id });
 
     if (rows.length > 0) {
-      await tx.insert(leads).values(
-        rows.map((r) => ({
-          phone: r.phoneE164,
-          name: r.name,
-          company: r.company,
-          timezone: r.timezone,
-          source: r.source,
-          consentBasis: r.consentBasis,
-          consentBasisType: r.consentBasisType,
-          // has_basis only when the classified basis actually permits calling;
-          // "unrecognized" text is present but not a basis.
-          consentStatus: isCallableBasisType(r.consentBasisType)
-            ? ("has_basis" as const)
-            : ("missing" as const),
-          dncStatus: r.dncStatus,
-          validationStatus: r.status,
-          validationReason: r.reason,
-          ingestionBatchId: batch.id,
-          rawSourceRow: r.raw,
-        })),
-      );
+      const inserted = await tx
+        .insert(leads)
+        .values(
+          rows.map((r) => ({
+            phone: r.phoneE164,
+            name: r.name,
+            company: r.company,
+            timezone: r.timezone,
+            source: r.source,
+            consentBasis: r.consentBasis,
+            consentBasisType: r.consentBasisType,
+            // has_basis only when the classified basis actually permits calling;
+            // "unrecognized" text is present but not a basis.
+            consentStatus: isCallableBasisType(r.consentBasisType)
+              ? ("has_basis" as const)
+              : ("missing" as const),
+            dncStatus: r.dncStatus,
+            validationStatus: r.status,
+            validationReason: r.reason,
+            ingestionBatchId: batch.id,
+            rawSourceRow: r.raw,
+          })),
+        )
+        .returning({
+          id: leads.id,
+          phone: leads.phone,
+          validationStatus: leads.validationStatus,
+        });
+
+      // Persist "found" dedupe permanently: upsert a contact-ledger row for every
+      // eligible inserted lead, so the number is never re-found across sessions
+      // even if this lead row is later quarantined/deleted (spec §2).
+      const foundEligible = inserted
+        .filter((l) => l.validationStatus === "eligible" && l.phone)
+        .map((l) => ({ phone: l.phone as string, leadId: l.id }));
+      await recordFound(foundEligible, tx);
     }
 
     await tx.insert(auditLog).values({

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { reps as repsTable } from "@/db/schema";
+import { reps as repsTable, leads as leadsTable } from "@/db/schema";
+import { recordCalled } from "@/lib/pipeline/ledger";
 import type { TelephonyProvider } from "@/lib/telephony/provider";
 import {
   getCampaign,
@@ -95,6 +96,13 @@ export async function runCampaignDialer(params: {
       }
 
       governor.onDialStarted();
+      // Guaranteed dial-release moment: stamp the persistent "called" ledger
+      // (dedupe across sessions) and the lead's lastContacted (spec §2/§6).
+      await recordCalled(lead.phone, lead.id);
+      await db
+        .update(leadsTable)
+        .set({ lastContacted: new Date() })
+        .where(eq(leadsTable.id, lead.id));
       slots--;
       released++;
       const key = seq++;

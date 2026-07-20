@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { callAttempts } from "@/db/schema";
+import { callAttempts, leadActivities } from "@/db/schema";
 import type { TelephonyProvider } from "@/lib/telephony/provider";
 import { HeuristicClassifier, type CallState } from "@/lib/classifier";
 import { chooseDigit, recordOutcome } from "@/lib/ivr/navigator";
+import { completePendingCallFollowUps } from "@/lib/pipeline/service";
 import { handoff } from "./handoff";
 import { dialerBus } from "./events";
 
@@ -220,15 +221,48 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
       .set(finalValues)
       .where(eq(callAttempts.id, outcome.attemptId));
   } else {
-    await db.insert(callAttempts).values({
+    // Non-bridged outcome: INSERT the attempt and append a `system` timeline
+    // bubble (spec §6). Bridged calls (outcome.attemptId set) get their activity
+    // from the console finalize instead, so no double bubble.
+    const [inserted] = await db
+      .insert(callAttempts)
+      .values({
+        leadId: lead.id,
+        campaignId: campaign.id,
+        phone: lead.phone,
+        repId: outcome.repId,
+        disposition: outcome.disposition,
+        ...finalValues,
+      })
+      .returning({ id: callAttempts.id });
+
+    await db.insert(leadActivities).values({
       leadId: lead.id,
-      campaignId: campaign.id,
-      phone: lead.phone,
-      repId: outcome.repId,
-      disposition: outcome.disposition,
-      ...finalValues,
+      callAttemptId: inserted.id,
+      kind: "system",
+      body: systemActivityBody(outcome.disposition),
+      meta: { disposition: outcome.disposition, finalState: outcome.finalState },
     });
+
+    // Spend the due `call` follow-up that authorized this re-dial past the
+    // `already_contacted` dedupe gate. The console never finalizes a non-bridged
+    // dialer call, so if we don't mark it done here the follow-up stays pending
+    // + due and re-authorizes the dial on every subsequent run. Mirrors the
+    // console's finalize spend for bridged calls (console/calls/route.ts).
+    await completePendingCallFollowUps(lead.id);
   }
 
   return outcome;
+}
+
+/** Human-readable dialer bubble text for a non-bridged machine disposition. */
+function systemActivityBody(disposition: string): string {
+  const map: Record<string, string> = {
+    no_answer: "Dialer: no answer",
+    voicemail: "Dialer: reached voicemail",
+    ivr_giveup: "Dialer: gave up navigating the IVR menu",
+    hold_timeout: "Dialer: hold timed out",
+    abandoned_no_rep: "Dialer: reached a human but no rep was available",
+  };
+  return map[disposition] ?? `Dialer: ${disposition}`;
 }

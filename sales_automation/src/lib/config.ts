@@ -36,3 +36,21 @@ export function dispositionLabel(id: string | null): string {
   if (!id) return "—";
   return DISPOSITIONS.find((d) => d.id === id)?.label ?? "—";
 }
+
+/**
+ * OUTCOME_TEMPLATES — prefilled one-click call-outcome documentation (spec §3).
+ * Each template pre-fills the composer body, advances the lead's pipeline stage,
+ * and may suggest a follow-up channel. `do_not_call` additionally routes through
+ * the compliance opt-out path (recordOptOut) at log time.
+ */
+export const OUTCOME_TEMPLATES = [
+  { key: "interested",     label: "Interested — send info", body: "Spoke with the lead — interested, send more information.", stage: "qualified",      suggestFollowUp: "email" },
+  { key: "callback",       label: "Callback requested",     body: "Lead asked to be called back.",                           stage: "follow_up",      suggestFollowUp: "call"  },
+  { key: "meeting",        label: "Meeting booked",         body: "Booked a meeting with the lead.",                         stage: "won",            suggestFollowUp: "email" },
+  { key: "voicemail",      label: "Left voicemail",         body: "No answer — left a voicemail.",                           stage: "contacted",      suggestFollowUp: "call"  },
+  { key: "no_answer",      label: "No answer",              body: "No answer, no voicemail left.",                           stage: "contacted",      suggestFollowUp: "call"  },
+  { key: "wrong_number",   label: "Wrong number",           body: "Number does not belong to this lead.",                    stage: "lost",           suggestFollowUp: null    },
+  { key: "not_interested", label: "Not interested",         body: "Lead is not interested.",                                 stage: "lost",           suggestFollowUp: null    },
+  { key: "do_not_call",    label: "Do not contact",         body: "Lead asked not to be contacted again.",                   stage: "do_not_contact", suggestFollowUp: null    },
+] as const;
+export type OutcomeTemplate = (typeof OUTCOME_TEMPLATES)[number];

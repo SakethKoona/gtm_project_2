@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte } from "drizzle-orm";
+import { and, count, desc, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import {
   leads,
@@ -6,6 +6,8 @@ import {
   callAttempts,
   auditLog,
   suppressionList,
+  contactLedger,
+  followUps,
 } from "@/db/schema";
 import { getDncScrubber, checkInternalSuppression } from "@/lib/ingestion/dnc";
 import { isCallableBasisType } from "@/lib/ingestion/consent";
@@ -24,6 +26,7 @@ import type { ConsentBasisType } from "@/lib/ingestion/consent";
 
 export type CheckName =
   | "eligible"
+  | "already_contacted"
   | "consent"
   | "dnc"
   | "suppression"
@@ -97,6 +100,34 @@ export async function checkDialable(
     !isCallableBasisType(lead.consentBasisType as ConsentBasisType | null)
   ) {
     return deny("consent", "no valid consent basis on record");
+  }
+
+  // 2.5. Already-contacted dedupe (spec §2). If the persistent contact ledger
+  // shows this number has been called before, deny — UNLESS the lead has a
+  // pending `call` follow-up now due, which is the sanctioned re-dial path. This
+  // stops accidental duplicate dials across sessions while letting the follow-up
+  // queue drive deliberate re-calls.
+  const [ledgerRow] = await db
+    .select({ callCount: contactLedger.callCount })
+    .from(contactLedger)
+    .where(eq(contactLedger.phone, phone))
+    .limit(1);
+  if (ledgerRow && ledgerRow.callCount > 0) {
+    const [dueFollowUp] = await db
+      .select({ id: followUps.id })
+      .from(followUps)
+      .where(
+        and(
+          eq(followUps.leadId, lead.id),
+          eq(followUps.channel, "call"),
+          eq(followUps.status, "pending"),
+          lte(followUps.dueAt, now),
+        ),
+      )
+      .limit(1);
+    if (!dueFollowUp) {
+      return deny("already_contacted", "already_called");
+    }
   }
 
   // 3+4. DNC + internal suppression re-check (can change after import).
