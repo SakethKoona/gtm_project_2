@@ -1,0 +1,50 @@
+"use client";
+
+import { Check, User } from "lucide-react";
+import { useTracker } from "./tracker-provider";
+import { cn } from "@/lib/utils";
+
+/** Pick which rep you are (identity for now — swap for real auth later). */
+export function RepPicker() {
+  const t = useTracker();
+  return (
+    <div className="mx-auto grid min-h-[60vh] max-w-md place-items-center px-6">
+      <div className="w-full rounded-xl border border-border bg-card p-6">
+        <div className="flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
+            <User className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="font-semibold">Who are you?</h2>
+            <p className="text-xs text-muted-foreground">
+              Pick your rep to receive calls and log your time.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-1.5">
+          {t.reps.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No reps yet — add one on the Dialer Dashboard.
+            </p>
+          )}
+          {t.reps.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => t.setRepId(r.id)}
+              className={cn(
+                "flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent/50",
+                t.repId === r.id && "border-primary/50 bg-accent",
+              )}
+            >
+              <span>
+                <span className="font-medium">{r.name}</span>
+                <span className="ml-2 text-xs text-muted-foreground">{r.phone}</span>
+              </span>
+              {t.repId === r.id && <Check className="h-4 w-4 text-primary" />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
