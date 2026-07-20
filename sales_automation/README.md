@@ -105,3 +105,12 @@ npm run db:generate   # generate a migration after editing schema.ts
 npm run db:migrate    # apply migrations
 npm run db:studio     # Drizzle Studio
 ```
+
+## License
+
+MIT — see the repository-root [`LICENSE`](../LICENSE).
+
+**Compliance note:** outbound calling is regulated (TCPA/TSR/state law). The
+external DNC registry check is a stubbed no-op; wire a real DNC provider and
+verify your legal obligations before running any live campaign. See the
+disclaimer in the repository-root README.

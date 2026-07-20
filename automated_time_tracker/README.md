@@ -87,3 +87,7 @@ To add/rename a tracked state or disposition: edit `lib/config.ts` only.
   carry everything needed.
 
 The original single-file prototype is preserved in `legacy/standalone.html`.
+
+## License
+
+MIT — see the repository-root [`LICENSE`](../LICENSE).
