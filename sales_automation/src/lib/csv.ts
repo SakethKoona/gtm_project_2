@@ -17,13 +17,25 @@ export function buildCsv(calls: Call[]): string {
   const rows = calls
     .slice()
     .reverse()
-    .map((c) => [
-      new Date(c.startedAt).toISOString(),
-      new Date(c.endedAt).toISOString(),
-      secs(c.acc.ringing), secs(c.acc.waiting), secs(c.acc.right), secs(c.acc.wrong),
-      secs(c.acc.voicemail), secs(c.acc.noanswer), secs(callTotal(c)),
-      dispositionLabel(c.disposition), c.note || "",
-    ]);
+    .map((c) => {
+      // Round each bucket first, then sum — so total_s always equals the sum of
+      // the per-bucket columns (no independent-rounding drift).
+      const ringing = secs(c.acc.ringing);
+      const waiting = secs(c.acc.waiting);
+      const right = secs(c.acc.right);
+      const wrong = secs(c.acc.wrong);
+      const voicemail = secs(c.acc.voicemail);
+      const noanswer = secs(c.acc.noanswer);
+      // Total = real call duration (start → end), not the sum of tracked buckets,
+      // so it matches the actual call length even with idle gaps.
+      const total = secs(callTotal(c));
+      return [
+        new Date(c.startedAt).toISOString(),
+        new Date(c.endedAt).toISOString(),
+        ringing, waiting, right, wrong, voicemail, noanswer, total,
+        dispositionLabel(c.disposition), c.note || "",
+      ];
+    });
   return [header, ...rows].map((r) => r.map(csvValue).join(",")).join("\n");
 }
 

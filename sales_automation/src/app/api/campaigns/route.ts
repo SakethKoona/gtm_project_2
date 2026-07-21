@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { createCampaign, listCampaigns } from "@/lib/campaigns/service";
+import { apiGuard } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const guard = await apiGuard(["admin"]);
+  if (!guard.ok) return guard.res;
   return Response.json({ campaigns: await listCampaigns() });
 }
 
@@ -15,6 +18,9 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const guard = await apiGuard(["admin"]);
+  if (!guard.ok) return guard.res;
+
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json({ error: "invalid" }, { status: 400 });

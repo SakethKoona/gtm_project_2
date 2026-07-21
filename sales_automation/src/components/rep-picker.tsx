@@ -2,6 +2,8 @@
 
 import { Check, User } from "lucide-react";
 import { useTracker } from "./tracker-provider";
+import { SOLO_REP_ID } from "@/hooks/useCallTracker";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /** Pick which rep you are (identity for now — swap for real auth later). */
@@ -43,6 +45,21 @@ export function RepPicker() {
               {t.repId === r.id && <Check className="h-4 w-4 text-primary" />}
             </button>
           ))}
+        </div>
+
+        {/* Solo: use the console without a rep or the dialer — saved locally. */}
+        <div className="mt-4 border-t border-border pt-4">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => t.setRepId(SOLO_REP_ID)}
+          >
+            Use without a rep (solo mode)
+          </Button>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            Track calls on this device only — no dialer, saved to this browser and
+            optionally your Google Sheet.
+          </p>
         </div>
       </div>
     </div>

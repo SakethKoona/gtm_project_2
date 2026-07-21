@@ -21,7 +21,7 @@ export function SyncPanel({
 }) {
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState<{ text: string; tone: Tone }>({
-    text: "Not connected. Paste your Apps Script Web App URL to auto-log calls. Setup steps are in SHEETS_SETUP.md.",
+    text: "Not connected. Paste your Google Sheet link to auto-log calls. One-time setup is in SHEETS_SETUP.md.",
     tone: "muted",
   });
   const syncingRef = useRef(false);
@@ -72,20 +72,23 @@ export function SyncPanel({
 
   const test = async () => {
     const u = url.trim();
-    if (!u) return setStatus({ text: "Enter your Web App URL first.", tone: "warn" });
+    if (!u) return setStatus({ text: "Paste your Google Sheet link first.", tone: "warn" });
     setStatus({ text: "Testing connection…", tone: "muted" });
     try {
-      const ok = await pingSheet(u);
-      setStatus(
-        ok
-          ? { text: "Connection works — click Save and finished calls append automatically.", tone: "ok" }
-          : { text: "Reached the URL but got an unexpected response. Re-check the Apps Script.", tone: "err" },
-      );
+      const r = await pingSheet(u);
+      if (r.ok) {
+        setStatus({
+          text: "Connected — click Save and finished calls append automatically.",
+          tone: "ok",
+        });
+      } else {
+        const share = r.email
+          ? ` Make sure the Sheet is shared with ${r.email} (Editor).`
+          : "";
+        setStatus({ text: (r.error ?? "Could not connect.") + share, tone: "err" });
+      }
     } catch (e) {
-      setStatus({
-        text: "Could not reach it: " + (e as Error).message + " — check deploy access = Anyone (see SHEETS_SETUP.md).",
-        tone: "err",
-      });
+      setStatus({ text: "Could not reach the server: " + (e as Error).message, tone: "err" });
     }
   };
 
@@ -101,7 +104,7 @@ export function SyncPanel({
       <Input
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        placeholder="Paste your Apps Script Web App URL…"
+        placeholder="Paste your Google Sheet link…"
       />
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={save}>Save</Button>

@@ -1,6 +1,7 @@
 import { parseLeadFile } from "@/lib/ingestion/parse";
 import { stageUpload } from "@/lib/ingestion/store";
 import { autoSuggestMapping, getMappingTemplate } from "@/lib/ingestion/service";
+import { apiGuard } from "@/lib/auth/guards";
 
 // Ingestion is inherently dynamic + writes temp files; never prerender/cache.
 export const dynamic = "force-dynamic";
@@ -12,6 +13,9 @@ export const dynamic = "force-dynamic";
  * one exists, otherwise a heuristic guess). Never assumes headers.
  */
 export async function POST(request: Request) {
+  const guard = await apiGuard(["admin"]);
+  if (!guard.ok) return guard.res;
+
   const form = await request.formData();
   const file = form.get("file");
   const vendor = (form.get("vendor") as string | null)?.trim() || null;

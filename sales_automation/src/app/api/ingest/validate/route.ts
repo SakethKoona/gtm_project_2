@@ -2,6 +2,7 @@ import { z } from "zod";
 import { readStaged } from "@/lib/ingestion/store";
 import { validateBatch } from "@/lib/ingestion/service";
 import type { ColumnMapping } from "@/lib/ingestion/types";
+import { apiGuard } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ const bodySchema = z.object({
  * row becomes dial-eligible until the user confirms and calls /commit.
  */
 export async function POST(request: Request) {
+  const guard = await apiGuard(["admin"]);
+  if (!guard.ok) return guard.res;
+
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json(

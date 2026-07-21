@@ -69,6 +69,28 @@ export const callStateEnum = pgEnum("call_state", [
 export const repPresenceEnum = pgEnum("rep_presence", ["available", "away"]);
 
 /**
+ * Auth roles. New signups default to `none` (no access — they see a "pending
+ * access" page). An admin promotes them to `rep` (call console only) or `admin`
+ * (everything, and can act as a rep). See src/lib/auth.
+ */
+export const userRoleEnum = pgEnum("user_role", ["none", "rep", "admin"]);
+
+/**
+ * users — authentication principals (email/password via Auth.js Credentials).
+ * `role` gates access. `repId` links a user to a dialer identity (phone) so reps
+ * — and admins acting as reps — can be bridged calls in the console.
+ */
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  passwordHash: text("password_hash").notNull(),
+  role: userRoleEnum("role").notNull().default("none"),
+  repId: uuid("rep_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * ingestion_batches — one row per upload. Holds the summary counts shown on the
  * pre-import report and the column mapping actually used for this batch.
  */

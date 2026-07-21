@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
+import { apiGuard } from "@/lib/auth/guards";
 import { db } from "@/db";
 import { callAttempts } from "@/db/schema";
 
@@ -45,6 +46,9 @@ function toAcc(
 
 // ── GET: recent calls for a rep (history + stats) ────────────────────────────
 export async function GET(request: Request) {
+  const guard = await apiGuard(["rep", "admin"]);
+  if (!guard.ok) return guard.res;
+
   const repId = new URL(request.url).searchParams.get("repId");
   if (!repId) return Response.json({ calls: [] });
 
@@ -82,6 +86,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const guard = await apiGuard(["rep", "admin"]);
+  if (!guard.ok) return guard.res;
+
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json({ error: "invalid", detail: parsed.error.flatten() }, { status: 400 });

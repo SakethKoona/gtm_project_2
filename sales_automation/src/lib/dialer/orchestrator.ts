@@ -62,6 +62,8 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
       callId,
       campaignId: campaign.id,
       state,
+      phone: lead.phone,
+      leadId: lead.id,
       at: new Date().toISOString(),
     });
   };

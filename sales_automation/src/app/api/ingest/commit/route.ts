@@ -6,6 +6,7 @@ import {
   saveMappingTemplate,
 } from "@/lib/ingestion/service";
 import type { ColumnMapping } from "@/lib/ingestion/types";
+import { apiGuard } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ const bodySchema = z.object({
  * template, and discards the staged upload. Only `eligible` rows are dial-eligible.
  */
 export async function POST(request: Request) {
+  const guard = await apiGuard(["admin"]);
+  if (!guard.ok) return guard.res;
+
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json(

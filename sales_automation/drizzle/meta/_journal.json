@@ -29,6 +29,13 @@
       "when": 1784578651748,
       "tag": "0003_bouncy_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784661191423,
+      "tag": "0004_lethal_maddog",
+      "breakpoints": true
     }
   ]
 }

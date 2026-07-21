@@ -3,64 +3,96 @@ import { callTotal } from "./format";
 import { dispositionLabel } from "./config";
 
 /**
- * Google Sheets live sync via a Google Apps Script web app (see SHEETS_SETUP.md).
- * text/plain keeps the request a "simple" CORS request (no preflight, which Apps
- * Script can't answer). Each call has a stable id; the script de-dupes on it, so
- * retries are safe.
+ * Google Sheets live sync (client side).
  *
- * Expansion note: when you add a real backend, you can move this behind a Next.js
- * API route (server-side Sheets API or a DB) without touching the UI.
+ * The browser never talks to Google directly — it POSTs finished calls to our own
+ * `/api/sheets` route, which holds the service-account credentials and appends to
+ * the Sheet. The user only ever pastes a normal Google Sheet link; setup is in
+ * SHEETS_SETUP.md. Each call has a stable id and the server de-dupes on it, so
+ * retries are safe.
  */
+
+/** Column order written to the Sheet (shared by client + server). */
+export const SHEET_HEADERS = [
+  "id",
+  "started",
+  "ended",
+  "ringing_s",
+  "waiting_s",
+  "right_s",
+  "wrong_s",
+  "voicemail_s",
+  "noanswer_s",
+  "total_s",
+  "disposition",
+  "note",
+] as const;
+
+export type SheetRow = Record<(typeof SHEET_HEADERS)[number], string | number>;
 
 const secs = (ms: number) => Math.round((ms || 0) / 1000);
 
-export function callToRow(c: Call) {
+export function callToRow(c: Call): SheetRow {
+  // Round each bucket first, then sum — so total_s equals the sum of the columns.
+  const ringing_s = secs(c.acc.ringing);
+  const waiting_s = secs(c.acc.waiting);
+  const right_s = secs(c.acc.right);
+  const wrong_s = secs(c.acc.wrong);
+  const voicemail_s = secs(c.acc.voicemail);
+  const noanswer_s = secs(c.acc.noanswer);
   return {
     id: c.id,
     started: new Date(c.startedAt).toISOString(),
     ended: new Date(c.endedAt).toISOString(),
-    ringing_s: secs(c.acc.ringing),
-    waiting_s: secs(c.acc.waiting),
-    right_s: secs(c.acc.right),
-    wrong_s: secs(c.acc.wrong),
-    voicemail_s: secs(c.acc.voicemail),
-    noanswer_s: secs(c.acc.noanswer),
+    ringing_s,
+    waiting_s,
+    right_s,
+    wrong_s,
+    voicemail_s,
+    noanswer_s,
+    // Real call duration (start → end), not the sum of tracked buckets.
     total_s: secs(callTotal(c)),
     disposition: dispositionLabel(c.disposition),
     note: c.note || "",
   };
 }
 
-async function post(url: string, payload: unknown): Promise<{ ok?: boolean }> {
-  const res = await fetch(url, {
+type PingResult = { ok: boolean; email?: string; error?: string };
+
+async function callApi(payload: unknown): Promise<Record<string, unknown>> {
+  const res = await fetch("/api/sheets", {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-    redirect: "follow",
   });
-  return res.json();
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ...data, _status: res.status };
 }
 
-export async function pingSheet(url: string): Promise<boolean> {
-  const r = await post(url, { type: "ping" });
-  return !!r.ok;
+/** Verify the server can read the pasted Sheet. Returns the address to share with. */
+export async function pingSheet(sheetUrl: string): Promise<PingResult> {
+  const data = await callApi({ action: "ping", sheetUrl });
+  return {
+    ok: data.ok === true,
+    email: data.serviceAccountEmail as string | undefined,
+    error: data.error as string | undefined,
+  };
 }
 
 /**
  * Push all not-yet-synced calls. Returns the ids that were successfully synced,
- * so the caller can mark exactly those (merge-safe even if new calls arrived
- * mid-sync). Failures are left unsynced and retried next time.
+ * so the caller marks exactly those (merge-safe even if new calls arrived
+ * mid-sync). On failure nothing is marked and it's retried next time.
  */
-export async function syncCalls(url: string, calls: Call[]): Promise<string[]> {
-  const done: string[] = [];
-  for (const c of calls) {
-    if (c.synced) continue;
-    try {
-      const r = await post(url, { type: "call", call: callToRow(c) });
-      if (r.ok) done.push(c.id);
-    } catch {
-      /* leave pending; retried next time */
-    }
+export async function syncCalls(
+  sheetUrl: string,
+  calls: Call[],
+): Promise<string[]> {
+  const rows = calls.filter((c) => !c.synced).map(callToRow);
+  if (rows.length === 0) return [];
+  const data = await callApi({ action: "sync", sheetUrl, rows });
+  if (data.ok !== true) {
+    throw new Error((data.error as string) || "Sync failed.");
   }
-  return done;
+  return (data.syncedIds as string[]) ?? [];
 }

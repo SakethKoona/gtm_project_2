@@ -33,7 +33,16 @@ export function fmtClock(ts: number): string {
   });
 }
 
-/** Total ms across all buckets of a saved call. */
+/** Real elapsed duration of a saved call (start → end) — the accurate total,
+ *  including any idle gaps between tracked buckets. Falls back to the sum of
+ *  buckets if timestamps are missing/degenerate. */
 export function callTotal(call: Call): number {
+  const wall = (call.endedAt ?? 0) - (call.startedAt ?? 0);
+  if (wall > 0) return wall;
+  return BUCKET_IDS.reduce((sum, id) => sum + (call.acc[id] || 0), 0);
+}
+
+/** Sum of the tracked buckets (the "where did the time go" breakdown). */
+export function trackedTotal(call: Call): number {
   return BUCKET_IDS.reduce((sum, id) => sum + (call.acc[id] || 0), 0);
 }

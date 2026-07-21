@@ -27,6 +27,9 @@ export type CallStateChanged = {
   callId: string;
   campaignId: string;
   state: string;
+  /** The lead being dialed, so the live board can label the call. */
+  phone?: string;
+  leadId?: string;
   at: string;
 };
 
@@ -60,11 +63,32 @@ export type CallBridged = {
   at: string;
 };
 
+/** Fired when a campaign dial batch starts — lets the dashboard show "dialing". */
+export type BatchStarted = {
+  type: "batch_started";
+  campaignId: string;
+  queued: number;
+  at: string;
+};
+
+/** Fired when a campaign dial batch finishes — lets the dashboard show a summary. */
+export type BatchFinished = {
+  type: "batch_finished";
+  campaignId: string;
+  released: number;
+  blockedByGate: number;
+  reachedHuman: number;
+  bridged: number;
+  at: string;
+};
+
 export type DialerEvent =
   | ScreenPop
   | CallStateChanged
   | GovernorSnapshot
-  | CallBridged;
+  | CallBridged
+  | BatchStarted
+  | BatchFinished;
 
 class DialerBus extends EventEmitter {
   publish(event: DialerEvent) {

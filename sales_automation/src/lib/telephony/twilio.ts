@@ -56,7 +56,21 @@ export class TwilioTelephonyProvider implements TelephonyProvider {
       url: `${this.publicUrl}/twiml/outbound?conf=${encodeURIComponent(conf)}`,
       method: "POST",
       // Twilio AMD gives a first-pass human/machine label via async callback.
-      machineDetection: "DetectMessageEnd",
+      // We NEVER leave voicemails (no audio to the lead), so we don't need
+      // "DetectMessageEnd" (which waits for a whole greeting to finish and often
+      // mislabels a live "hello?" as a machine). "Enable" decides human-vs-machine
+      // as fast as possible and biases toward connecting real people.
+      machineDetection: "Enable",
+      // Max time AMD analyzes before returning "unknown". If it can't decide, our
+      // /amd handler connects anyway (treats unknown as human), so keep this short
+      // to minimize dead air for the person who answered.
+      machineDetectionTimeout: 5,
+      // A machine is flagged only after this much *continuous* speech. Raised well
+      // above the 2400ms default so a normal human greeting ("Hi, this is Bob, how
+      // can I help you?") isn't mistaken for a machine reading a message.
+      machineDetectionSpeechThreshold: 4000,
+      machineDetectionSpeechEndThreshold: 1500,
+      machineDetectionSilenceTimeout: 5000,
       asyncAmd: "true",
       asyncAmdStatusCallback: `${this.publicUrl}/amd`,
       asyncAmdStatusCallbackMethod: "POST",

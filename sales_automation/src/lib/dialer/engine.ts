@@ -1,6 +1,3 @@
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { reps as repsTable } from "@/db/schema";
 import type { TelephonyProvider } from "@/lib/telephony/provider";
 import {
   getCampaign,
@@ -62,6 +59,13 @@ export async function runCampaignDialer(params: {
     maxIvrLevels: campaign.maxIvrLevels,
     repRingTimeoutSeconds: campaign.repRingTimeoutSeconds,
   };
+
+  dialerBus.publish({
+    type: "batch_started",
+    campaignId,
+    queued: leads.length,
+    at: new Date().toISOString(),
+  });
 
   while (leadIdx < leads.length || inFlight.size > 0) {
     // Refresh governor inputs each cycle.
@@ -130,13 +134,15 @@ export async function runCampaignDialer(params: {
     }
   }
 
-  return { released, blockedByGate, outcomes, finalOverdialRatio: ratio };
-}
+  dialerBus.publish({
+    type: "batch_finished",
+    campaignId,
+    released,
+    blockedByGate,
+    reachedHuman: outcomes.filter((o) => o.reachedHuman).length,
+    bridged: outcomes.filter((o) => o.bridged).length,
+    at: new Date().toISOString(),
+  });
 
-/** Reset all reps on a campaign to a clean available/free state (sim helper). */
-export async function resetRepsAvailable(campaignId: string) {
-  await db
-    .update(repsTable)
-    .set({ presence: "available", onCall: false })
-    .where(eq(repsTable.campaignId, campaignId));
+  return { released, blockedByGate, outcomes, finalOverdialRatio: ratio };
 }

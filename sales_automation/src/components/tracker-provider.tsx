@@ -101,8 +101,9 @@ export function TrackerProvider({ children }: { children: React.ReactNode }) {
 
   const totalRef = useRef(0);
   useEffect(() => {
-    totalRef.current = t.totalMs;
-  }, [t.totalMs]);
+    // Guard on the real elapsed call time (falls back to tracked bucket time).
+    totalRef.current = Math.max(t.elapsedMs, t.totalMs);
+  }, [t.elapsedMs, t.totalMs]);
 
   const openEndCall = useCallback(() => {
     if (totalRef.current < 1000) {

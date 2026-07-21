@@ -3,7 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActiveId, BucketId, Call, CurrentCall } from "@/lib/types";
 import { BUCKET_IDS, emptyAcc } from "@/lib/config";
-import { loadCurrent, saveCurrent } from "@/lib/storage";
+import {
+  loadCurrent,
+  saveCurrent,
+  loadCalls,
+  saveCalls,
+} from "@/lib/storage";
+
+/**
+ * Sentinel rep id for "solo" mode: use the console standalone, with no rep and
+ * no database — finished calls persist to localStorage, exactly like the
+ * original standalone tracker. Any other (real) rep id routes calls to the DB.
+ */
+export const SOLO_REP_ID = "solo";
 
 /** Lead context pinned to the console when a dialer call bridges to this rep. */
 export type IncomingCall = {
@@ -18,7 +30,7 @@ export type IncomingCall = {
 
 function freshCall(): CurrentCall {
   const t = Date.now();
-  return { startedAt: t, acc: emptyAcc(), active: "idle", activeSince: t };
+  return { startedAt: t, firstActiveAt: null, acc: emptyAcc(), active: "idle", activeSince: t };
 }
 
 function bank(prev: CurrentCall, now: number): Record<BucketId, number> {
@@ -29,6 +41,12 @@ function bank(prev: CurrentCall, now: number): Record<BucketId, number> {
   return acc;
 }
 
+/** Stamp the call's real start the first time any bucket is activated. */
+function markStart(prev: CurrentCall, activating: ActiveId, t: number): number | null {
+  if (prev.firstActiveAt != null) return prev.firstActiveAt;
+  return activating !== "idle" ? t : null;
+}
+
 /**
  * Call-timer state machine, API-backed. The in-progress call lives in
  * localStorage (survives refresh); finished calls are persisted to the platform
@@ -36,6 +54,7 @@ function bank(prev: CurrentCall, now: number): Record<BucketId, number> {
  * bridged to this rep, `startIncoming` pins the lead and auto-starts on "right".
  */
 export function useCallTracker(repId: string | null) {
+  const solo = repId === SOLO_REP_ID;
   const [current, setCurrent] = useState<CurrentCall>(freshCall);
   const [calls, setCalls] = useState<Call[]>([]);
   const [now, setNow] = useState<number>(() => Date.now());
@@ -64,8 +83,12 @@ export function useCallTracker(repId: string | null) {
     if (hydrated) saveCurrent(current);
   }, [current, hydrated]);
 
-  // Fetch this rep's call history.
+  // Fetch call history. Solo mode reads from localStorage; a real rep reads the DB.
   const refetch = useCallback(async () => {
+    if (solo) {
+      setCalls(loadCalls());
+      return;
+    }
     if (!repId) {
       setCalls([]);
       return;
@@ -76,15 +99,17 @@ export function useCallTracker(repId: string | null) {
     } catch {
       /* keep what we have */
     }
-  }, [repId]);
+  }, [repId, solo]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refetch();
   }, [refetch]);
 
-  // Live tick (~60fps) only while a bucket runs; smooth milliseconds.
+  // Live tick (~60fps) while a bucket runs OR the call is in progress (so the
+  // call clock keeps advancing through idle gaps, matching the logged total).
+  const inProgress = current.active !== "idle" || current.firstActiveAt != null;
   useEffect(() => {
-    if (current.active === "idle") return;
+    if (!inProgress) return;
     let raf = 0;
     const loop = () => {
       setNow(Date.now());
@@ -92,12 +117,18 @@ export function useCallTracker(repId: string | null) {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [current.active]);
+  }, [inProgress]);
 
   const switchTo = useCallback((id: ActiveId) => {
     setCurrent((prev) => {
       const t = Date.now();
-      return { ...prev, acc: bank(prev, t), active: id, activeSince: t };
+      return {
+        ...prev,
+        acc: bank(prev, t),
+        active: id,
+        activeSince: t,
+        firstActiveAt: markStart(prev, id, t),
+      };
     });
     setNow(Date.now());
   }, []);
@@ -106,7 +137,13 @@ export function useCallTracker(repId: string | null) {
     setCurrent((prev) => {
       const t = Date.now();
       const active = prev.active === id ? "idle" : id;
-      return { ...prev, acc: bank(prev, t), active, activeSince: t };
+      return {
+        ...prev,
+        acc: bank(prev, t),
+        active,
+        activeSince: t,
+        firstActiveAt: markStart(prev, active, t),
+      };
     });
     setNow(Date.now());
   }, []);
@@ -117,6 +154,7 @@ export function useCallTracker(repId: string | null) {
     const t = Date.now();
     const fresh: CurrentCall = {
       startedAt: t,
+      firstActiveAt: t,
       acc: emptyAcc(),
       active: "right",
       activeSince: t,
@@ -131,8 +169,38 @@ export function useCallTracker(repId: string | null) {
       const prev = currentRef.current;
       const t = Date.now();
       const acc = bank(prev, t);
-      const total = BUCKET_IDS.reduce((s, id) => s + (acc[id] || 0), 0);
-      if (total < 1000) return false;
+      const tracked = BUCKET_IDS.reduce((s, id) => s + (acc[id] || 0), 0);
+      // Real call start = first time a bucket was pressed; total = elapsed since.
+      const startedAt = prev.firstActiveAt ?? prev.startedAt;
+      const elapsed = t - startedAt;
+      // Nothing meaningful tracked → don't save.
+      if (prev.firstActiveAt == null || (tracked < 1000 && elapsed < 1000)) return false;
+
+      // Solo mode: persist the full six-bucket call to localStorage, no DB.
+      if (solo) {
+        const call: Call = {
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `${t}-${Math.round(elapsed)}`,
+          startedAt,
+          endedAt: t,
+          acc,
+          disposition: dispositionId,
+          note: note.trim() || null,
+          synced: false,
+        };
+        setCalls((prevCalls) => {
+          const next = [call, ...prevCalls];
+          saveCalls(next);
+          return next;
+        });
+        const fresh = freshCall();
+        currentRef.current = fresh;
+        setCurrent(fresh);
+        setIncoming(null);
+        return true;
+      }
 
       const inc = incomingRef.current;
       // The rep only owns the conversation buckets; ring/wait come from the dialer.
@@ -155,7 +223,7 @@ export function useCallTracker(repId: string | null) {
             repBreakdown,
             disposition: dispositionId,
             note: note.trim() || null,
-            startedAt: prev.startedAt,
+            startedAt,
             endedAt: t,
           }),
         });
@@ -170,8 +238,42 @@ export function useCallTracker(repId: string | null) {
       refetch();
       return true;
     },
-    [repId, refetch],
+    [repId, solo, refetch],
   );
+
+  /** Mark calls as synced to the Sheet (persisted in solo mode). */
+  const markSynced = useCallback(
+    (ids: string[]) => {
+      setCalls((prev) => {
+        const next = prev.map((c) =>
+          ids.includes(c.id) ? { ...c, synced: true } : c,
+        );
+        if (solo) saveCalls(next);
+        return next;
+      });
+    },
+    [solo],
+  );
+
+  /** Delete a saved call (solo mode only — DB history is read-only here). */
+  const deleteCall = useCallback(
+    (id: string) => {
+      if (!solo) return;
+      setCalls((prev) => {
+        const next = prev.filter((c) => c.id !== id);
+        saveCalls(next);
+        return next;
+      });
+    },
+    [solo],
+  );
+
+  /** Clear all saved calls (solo mode only). */
+  const clearAll = useCallback(() => {
+    if (!solo) return;
+    setCalls([]);
+    saveCalls([]);
+  }, [solo]);
 
   const discardCurrent = useCallback(() => {
     const fresh = freshCall();
@@ -189,6 +291,9 @@ export function useCallTracker(repId: string | null) {
     [current, now],
   );
   const totalMs = BUCKET_IDS.reduce((s, id) => s + bucketMs(id), 0);
+  // Real elapsed time of the in-progress call (start → now), incl. idle gaps.
+  const elapsedMs =
+    current.firstActiveAt != null ? Math.max(0, now - current.firstActiveAt) : 0;
 
   return {
     hydrated,
@@ -198,11 +303,16 @@ export function useCallTracker(repId: string | null) {
     active: current.active,
     bucketMs,
     totalMs,
+    elapsedMs,
     switchTo,
     toggleBucket,
     startIncoming,
     commitCall,
     discardCurrent,
     refetch,
+    markSynced,
+    deleteCall,
+    clearAll,
+    solo,
   };
 }

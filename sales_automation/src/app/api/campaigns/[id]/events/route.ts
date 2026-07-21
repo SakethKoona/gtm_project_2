@@ -1,4 +1,5 @@
 import { dialerBus, type DialerEvent } from "@/lib/dialer/events";
+import { apiGuard } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const guard = await apiGuard(["rep", "admin"]);
+  if (!guard.ok) return guard.res;
+
   const { id } = await params;
   const encoder = new TextEncoder();
 

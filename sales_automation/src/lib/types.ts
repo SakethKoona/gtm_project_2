@@ -39,6 +39,10 @@ export interface Call {
 /** The in-progress call: banked ms per bucket + which bucket is currently running. */
 export interface CurrentCall {
   startedAt: number;
+  /** When tracking first started this call (first bucket pressed). The saved
+   *  call's total = endedAt − firstActiveAt, i.e. the real elapsed call time,
+   *  so idle gaps between key presses aren't lost. Null until the first press. */
+  firstActiveAt: number | null;
   acc: Record<BucketId, number>;
   active: ActiveId;
   activeSince: number;

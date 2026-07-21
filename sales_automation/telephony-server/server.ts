@@ -7,7 +7,10 @@ import websocket from "@fastify/websocket";
 import twilio from "twilio";
 
 import { getSession } from "../src/lib/telephony/registry";
-import { getTelephonyProvider } from "../src/lib/telephony/factory";
+import {
+  getTelephonyProvider,
+  isTelephonyConfigured,
+} from "../src/lib/telephony/factory";
 import { runCampaignDialer } from "../src/lib/dialer/engine";
 import { HeuristicClassifier } from "../src/lib/classifier";
 import { getSTT } from "../src/lib/classifier/stt";
@@ -94,16 +97,24 @@ app.post("/twiml/rep-join", async (req, reply) => {
 });
 
 // ── AMD result → HUMAN / VOICEMAIL event into the call's state machine.
+//
+// Twilio AMD returns: "human", "machine_start"/"machine_end_*", "fax", "unknown".
+// We only hang up on a CONFIRMED machine (a real voicemail greeting). "unknown"
+// means AMD couldn't decide — we give the benefit of the doubt and CONNECT,
+// because dropping a real person is far worse than a rep hearing a voicemail and
+// hanging up. This biases the whole system toward reaching live humans.
 app.post("/amd", async (req, reply) => {
   const b = req.body as { CallSid?: string; AnsweredBy?: string };
   const session = b.CallSid ? getSession(b.CallSid) : undefined;
   if (session && !session.amdReported) {
     session.amdReported = true;
-    const human = b.AnsweredBy === "human";
+    const answeredBy = b.AnsweredBy ?? "unknown";
+    const isMachine = answeredBy.startsWith("machine") || answeredBy === "fax";
+    app.log.info(`AMD for ${b.CallSid}: answeredBy=${answeredBy} → ${isMachine ? "VOICEMAIL" : "HUMAN"}`);
     session.events.push(
-      human
-        ? { type: "audio", label: "human_greeting" }
-        : { type: "audio", label: "voicemail_greeting" },
+      isMachine
+        ? { type: "audio", label: "voicemail_greeting" }
+        : { type: "audio", label: "human_greeting" },
     );
   }
   return reply.send("ok");
@@ -173,28 +184,60 @@ app.get("/media", { websocket: true }, (socket) => {
   socket.on("close", () => stt?.close());
 });
 
-// ── Trigger real dialing for a campaign (uses the real provider when configured).
+// ── Trigger real dialing for a campaign via Twilio.
 app.post("/dial/campaign", async (req, reply) => {
   const b = req.body as { campaignId?: string };
   if (!b.campaignId) return reply.code(400).send({ error: "campaignId required" });
+  if (!isTelephonyConfigured()) {
+    return reply.code(503).send({
+      error: `Telephony not configured. Missing: ${telephonyMissing().join(", ")}.`,
+    });
+  }
   const { provider, mode } = getTelephonyProvider();
   void runCampaignDialer({
     provider,
     campaignId: b.campaignId,
-    fromNumber: process.env.TWILIO_NUMBER ?? "+15550000000",
+    fromNumber: process.env.TWILIO_NUMBER!,
     talkTimeMs: 1500,
   }).catch((e) => app.log.error(e));
   return reply.send({ started: true, mode });
 });
 
-  app.get("/health", async () => ({ ok: true, publicUrl: PUBLIC_URL, wss: WSS_URL }));
+  app.get("/health", async () => ({
+    ok: true,
+    configured: isTelephonyConfigured(),
+    publicUrl: PUBLIC_URL,
+    wss: WSS_URL,
+  }));
 
-  const { mode } = getTelephonyProvider();
-  app.log.info(`Telephony provider mode: ${mode}`);
-  app.log.info(`PUBLIC_URL=${PUBLIC_URL}  (Twilio must be able to reach this)`);
+  // ── Preflight: report exactly what's configured so a misconfig is obvious.
+  const missing = telephonyMissing();
+  if (missing.length === 0) {
+    app.log.info(`✅ Twilio configured. Dialing FROM ${process.env.TWILIO_NUMBER}`);
+    app.log.info(`PUBLIC_URL=${PUBLIC_URL}  (Twilio must be able to reach this)`);
+    if (!/^https:\/\//.test(PUBLIC_URL)) {
+      app.log.warn(
+        `⚠️  PUBLIC_URL is not https — Twilio webhooks + Media Streams require a public https URL (use an ngrok https URL).`,
+      );
+    }
+  } else {
+    app.log.warn(
+      `⚠️  Twilio NOT configured — dialing is disabled. Missing env: ${missing.join(", ")}. ` +
+        `Set these in .env and restart to place real calls.`,
+    );
+  }
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
   app.log.info(`telephony server on :${PORT}`);
+}
+
+function telephonyMissing(): string[] {
+  return [
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_NUMBER",
+    "PUBLIC_URL",
+  ].filter((k) => !process.env[k]);
 }
 
 function escapeXml(s: string) {
