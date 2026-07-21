@@ -9,7 +9,7 @@ export function RepPicker() {
   const t = useTracker();
   return (
     <div className="mx-auto grid min-h-[60vh] max-w-md place-items-center px-6">
-      <div className="w-full rounded-xl border border-border bg-card p-6">
+      <div className="w-full rounded-xl border border-border bg-card p-6 soft-shadow">
         <div className="flex items-center gap-2">
           <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
             <User className="h-4 w-4" />
@@ -32,8 +32,8 @@ export function RepPicker() {
               key={r.id}
               onClick={() => t.setRepId(r.id)}
               className={cn(
-                "flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent/50",
-                t.repId === r.id && "border-primary/50 bg-accent",
+                "flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left text-sm outline-none transition-[transform,color,background-color] duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
+                t.repId === r.id && "border-primary/50 bg-primary/10",
               )}
             >
               <span>

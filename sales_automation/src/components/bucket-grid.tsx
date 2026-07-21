@@ -19,12 +19,16 @@ export function BucketGrid() {
             title={b.sub}
             style={
               active
-                ? { borderColor: b.color, boxShadow: `inset 0 0 0 1px ${b.color}` }
+                ? {
+                    borderColor: `${b.color}55`,
+                    background: `${b.color}14`,
+                    boxShadow: `inset 0 0 0 1px ${b.color}55`,
+                  }
                 : undefined
             }
             className={cn(
-              "flex flex-col gap-1 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors",
-              !active && "hover:bg-accent/40",
+              "flex flex-col gap-1 rounded-lg border border-border bg-card px-3 py-2.5 text-left outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
+              !active && "hover:bg-muted",
             )}
           >
             <span className="flex items-center gap-2">

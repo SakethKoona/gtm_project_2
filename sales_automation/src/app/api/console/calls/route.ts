@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { callAttempts } from "@/db/schema";
 import {
@@ -197,6 +197,46 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ ok: true, id: saved?.id });
+}
+
+// ── PATCH: mark rows synced to the Google Sheet ──────────────────────────────
+const patchSchema = z.object({ ids: z.array(z.string()).min(1) });
+
+export async function PATCH(request: Request) {
+  const parsed = patchSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return Response.json({ error: "invalid" }, { status: 400 });
+  }
+  await db
+    .update(callAttempts)
+    .set({ syncedToSheet: true })
+    .where(inArray(callAttempts.id, parsed.data.ids));
+  return Response.json({ ok: true, updated: parsed.data.ids.length });
+}
+
+// ── DELETE: remove one manual call by id, or clear a rep's manual history ─────
+// Scoped to source='manual' so a rep clearing their console history can never
+// destroy authoritative dialer-bridged records (they are dialer-owned and are
+// referenced by dashboard metrics + lead_activities.call_attempt_id).
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
+  const repId = url.searchParams.get("repId");
+  if (id) {
+    await db
+      .delete(callAttempts)
+      .where(and(eq(callAttempts.id, id), eq(callAttempts.source, "manual")));
+    return Response.json({ ok: true });
+  }
+  if (repId) {
+    await db
+      .delete(callAttempts)
+      .where(
+        and(eq(callAttempts.repId, repId), eq(callAttempts.source, "manual")),
+      );
+    return Response.json({ ok: true });
+  }
+  return Response.json({ error: "id or repId required" }, { status: 400 });
 }
 
 async function appendToSheet(

@@ -180,6 +180,53 @@ export function useCallTracker(repId: string | null) {
     setIncoming(null);
   }, []);
 
+  /** Delete a single saved call, then re-read history from the API. */
+  const deleteCall = useCallback(
+    async (id: string) => {
+      setCalls((p) => p.filter((c) => c.id !== id));
+      try {
+        await fetch(`/api/console/calls?id=${id}`, { method: "DELETE" });
+      } catch {
+        /* optimistic; refetch reconciles */
+      }
+      refetch();
+    },
+    [refetch],
+  );
+
+  /** Clear this rep's entire saved history. */
+  const clearAll = useCallback(async () => {
+    if (!repId) return;
+    setCalls([]);
+    try {
+      await fetch(`/api/console/calls?repId=${repId}`, { method: "DELETE" });
+    } catch {
+      /* optimistic; refetch reconciles */
+    }
+    refetch();
+  }, [repId, refetch]);
+
+  /** Mark the given call ids as synced to the Google Sheet, then refetch. */
+  const markSynced = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      setCalls((prev) =>
+        prev.map((c) => (ids.includes(c.id) ? { ...c, synced: true } : c)),
+      );
+      try {
+        await fetch("/api/console/calls", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids }),
+        });
+      } catch {
+        /* optimistic; refetch reconciles */
+      }
+      refetch();
+    },
+    [refetch],
+  );
+
   const bucketMs = useCallback(
     (id: BucketId): number => {
       let ms = current.acc[id] || 0;
@@ -203,6 +250,9 @@ export function useCallTracker(repId: string | null) {
     startIncoming,
     commitCall,
     discardCurrent,
+    deleteCall,
+    clearAll,
+    markSynced,
     refetch,
   };
 }

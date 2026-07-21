@@ -1,14 +1,25 @@
 "use client";
 
-import { Pause, PhoneOff, Phone, UserRound } from "lucide-react";
+import { useState } from "react";
+import { Download, Pause, PhoneOff, Phone, Settings2, Trash2, UserRound } from "lucide-react";
 import { useTracker } from "@/components/tracker-provider";
 import { RepPicker } from "@/components/rep-picker";
 import { BucketGrid } from "@/components/bucket-grid";
+import { SyncPanel } from "@/components/sync-panel";
 import { StatCards } from "@/components/stat-cards";
 import { HistoryTable } from "@/components/history-table";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { BUCKETS } from "@/lib/config";
 import { fmtMs } from "@/lib/format";
+import { downloadCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 
 export default function ConsolePage() {
@@ -37,46 +48,59 @@ export default function ConsolePage() {
   const available = t.currentRep?.presence === "available";
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-5">
+    <div className="mx-auto max-w-5xl px-5 py-6">
       {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-primary/15 text-primary">
-            <UserRound className="h-4 w-4" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">{t.currentRep?.name ?? "Rep"}</div>
-            <button
-              className="text-xs text-muted-foreground hover:underline"
-              onClick={() => t.setRepId(null)}
-            >
-              switch rep
-            </button>
-          </div>
+      <header
+        className="rise flex flex-wrap items-end justify-between gap-3"
+        style={{ "--rise-delay": "80ms" } as React.CSSProperties}
+      >
+        <div>
+          <div className="eyebrow">Call Console</div>
+          <h1 className="font-display text-2xl">Live console</h1>
         </div>
-        <Button
-          size="sm"
-          variant={available ? "secondary" : "outline"}
-          onClick={togglePresence}
-          className="gap-2"
-        >
-          <span
-            className={cn(
-              "h-2 w-2 rounded-full",
-              available ? "bg-emerald-500" : "bg-muted-foreground/40",
-            )}
-          />
-          {available ? "Available" : "Away"}
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
+              <UserRound className="h-4 w-4" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">{t.currentRep?.name ?? "Rep"}</div>
+              <button
+                className="rounded text-xs text-muted-foreground outline-none transition-[transform,color] duration-150 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]"
+                onClick={() => t.setRepId(null)}
+              >
+                switch rep
+              </button>
+            </div>
+          </div>
+          <SyncSettingsDialog />
+          <Button
+            size="sm"
+            variant={available ? "secondary" : "outline"}
+            onClick={togglePresence}
+            className="gap-2"
+          >
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                available ? "bg-green-600" : "bg-muted-foreground/40",
+              )}
+            />
+            {available ? "Available" : "Away"}
+          </Button>
+        </div>
       </header>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* Live call */}
-        <section className="rounded-xl border border-border bg-card p-5">
+        <section
+          className="rise rounded-xl border border-border bg-card p-5 soft-shadow"
+          style={{ "--rise-delay": "160ms" } as React.CSSProperties}
+        >
           {/* Incoming / active lead context (screen-pop) */}
           {t.incoming ? (
-            <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
+            <div className="mb-4 rounded-lg border border-green-600/30 bg-green-100 p-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-green-700">
                 <Phone className="h-3.5 w-3.5" /> Connected to lead
               </div>
               <div className="mt-1 font-semibold">
@@ -140,17 +164,72 @@ export default function ConsolePage() {
         </section>
 
         {/* History + stats */}
-        <section className="min-w-0 space-y-4">
+        <section
+          className="rise min-w-0 space-y-4"
+          style={{ "--rise-delay": "240ms" } as React.CSSProperties}
+        >
           <StatCards calls={t.calls} />
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Your recent calls
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">
+              Your recent calls
+            </h2>
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={() => downloadCsv(t.calls)}
+              >
+                <Download className="h-3.5 w-3.5" /> CSV
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs text-destructive"
+                onClick={() => {
+                  if (confirm("Delete ALL of your saved call history? This cannot be undone."))
+                    t.clearAll();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Clear
+              </Button>
+            </div>
+          </div>
           <div className="max-h-[520px] overflow-auto">
-            <HistoryTable calls={t.calls} />
+            <HistoryTable calls={t.calls} onDelete={t.deleteCall} />
           </div>
         </section>
       </div>
     </div>
+  );
+}
+
+function SyncSettingsDialog() {
+  const t = useTracker();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setOpen(true)}>
+        <Settings2 className="h-4 w-4" /> Sheet sync
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Google Sheet sync</DialogTitle>
+            <DialogDescription>
+              Auto-append every finished call to a Google Sheet. Setup steps are in
+              SHEETS_SETUP.md.
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <SyncPanel
+            calls={t.calls}
+            hydrated={t.hydrated}
+            onMarkSynced={t.markSynced}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
