@@ -94,9 +94,9 @@ export function SyncPanel({
 
   const toneClass: Record<Tone, string> = {
     muted: "text-muted-foreground",
-    ok: "text-emerald-400",
-    warn: "text-amber-400",
-    err: "text-red-400",
+    ok: "text-green-700",
+    warn: "text-amber-700",
+    err: "text-red-700",
   };
 
   return (

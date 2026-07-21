@@ -61,8 +61,8 @@ export const HistoryTable = memo(function HistoryTable({
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">{cell(c, "ringing")}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{cell(c, "waiting")}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums text-emerald-400">{cell(c, "right")}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums text-red-400">{cell(c, "wrong")}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums text-green-700">{cell(c, "right")}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums text-red-700">{cell(c, "wrong")}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{cell(c, "voicemail")}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{cell(c, "noanswer")}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(callTotal(c))}</TableCell>
@@ -75,7 +75,7 @@ export const HistoryTable = memo(function HistoryTable({
                 {onDelete && (
                   <button
                     onClick={() => onDelete(c.id)}
-                    className="text-muted-foreground/60 hover:text-destructive"
+                    className="rounded text-muted-foreground/60 outline-none transition-[transform,color] duration-150 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]"
                     aria-label="Delete call"
                   >
                     <X className="h-4 w-4" />

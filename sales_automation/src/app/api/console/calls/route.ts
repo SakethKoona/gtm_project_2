@@ -1,10 +1,28 @@
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { apiGuard } from "@/lib/auth/guards";
 import { db } from "@/db";
 import { callAttempts } from "@/db/schema";
+import {
+  logOutcome,
+  completePendingCallFollowUps,
+} from "@/lib/pipeline/service";
+import { recordCalled } from "@/lib/pipeline/ledger";
+import { OUTCOME_TEMPLATES } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Rep disposition → outcome template (design §6). "other" has no template and
+ * becomes a custom note-only outcome (falls through to undefined).
+ */
+const DISPOSITION_TO_TEMPLATE: Record<string, string> = {
+  booked: "meeting",
+  callback: "callback",
+  not_interested: "not_interested",
+  wrong_number: "wrong_number",
+  no_contact: "no_answer",
+};
 
 type Timeline = { state: string; at: string }[] | null;
 
@@ -132,6 +150,47 @@ export async function POST(request: Request) {
       .returning();
   }
 
+  // ── Pipeline integration (design §6) ──────────────────────────────────────
+  // Manual console call → record a "called" write in the persistent ledger so
+  // the number is never re-dialed accidentally. Dialer calls already record on
+  // dial-release (engine.ts).
+  if (!existing && b.phone) {
+    await recordCalled(b.phone, b.leadId ?? undefined);
+  }
+
+  const leadId = b.leadId;
+  if (leadId && saved) {
+    // A completed call satisfies any pending call follow-up for this lead. Do
+    // this BEFORE logOutcome so a new callback follow-up it may create is not
+    // itself immediately marked done.
+    await completePendingCallFollowUps(leadId);
+
+    // Map the rep disposition → outcome template and log it to the lead timeline.
+    const disp = b.disposition ?? null;
+    const templateKey = disp ? DISPOSITION_TO_TEMPLATE[disp] : undefined;
+    const template = templateKey
+      ? OUTCOME_TEMPLATES.find((t) => t.key === templateKey)
+      : undefined;
+    const note = b.note?.trim();
+    const body = note || template?.body || "Call logged from console.";
+    // Callback disposition auto-schedules a call follow-up +24h (design §6).
+    const followUp =
+      disp === "callback"
+        ? {
+            channel: "call" as const,
+            dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            note: "Callback requested from console",
+          }
+        : undefined;
+    await logOutcome(leadId, {
+      templateKey: template?.key,
+      body,
+      repId: b.repId,
+      callAttemptId: saved.id,
+      followUp,
+    });
+  }
+
   // Optional server-side Google Sheets append (auto-log). See SHEETS_SETUP.md.
   const url = process.env.SHEET_WEBHOOK_URL;
   if (url && saved && !saved.syncedToSheet) {
@@ -145,6 +204,46 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ ok: true, id: saved?.id });
+}
+
+// ── PATCH: mark rows synced to the Google Sheet ──────────────────────────────
+const patchSchema = z.object({ ids: z.array(z.string()).min(1) });
+
+export async function PATCH(request: Request) {
+  const parsed = patchSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return Response.json({ error: "invalid" }, { status: 400 });
+  }
+  await db
+    .update(callAttempts)
+    .set({ syncedToSheet: true })
+    .where(inArray(callAttempts.id, parsed.data.ids));
+  return Response.json({ ok: true, updated: parsed.data.ids.length });
+}
+
+// ── DELETE: remove one manual call by id, or clear a rep's manual history ─────
+// Scoped to source='manual' so a rep clearing their console history can never
+// destroy authoritative dialer-bridged records (they are dialer-owned and are
+// referenced by dashboard metrics + lead_activities.call_attempt_id).
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
+  const repId = url.searchParams.get("repId");
+  if (id) {
+    await db
+      .delete(callAttempts)
+      .where(and(eq(callAttempts.id, id), eq(callAttempts.source, "manual")));
+    return Response.json({ ok: true });
+  }
+  if (repId) {
+    await db
+      .delete(callAttempts)
+      .where(
+        and(eq(callAttempts.repId, repId), eq(callAttempts.source, "manual")),
+      );
+    return Response.json({ ok: true });
+  }
+  return Response.json({ error: "id or repId required" }, { status: 400 });
 }
 
 async function appendToSheet(

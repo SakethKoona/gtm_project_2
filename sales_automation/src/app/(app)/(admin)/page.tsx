@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 type MappableField =
   | "phone"
   | "name"
@@ -58,12 +61,15 @@ type ValidateResp = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  eligible: "bg-emerald-100 text-emerald-800",
-  quarantined: "bg-amber-100 text-amber-800",
-  blocked: "bg-red-100 text-red-800",
-  invalid: "bg-zinc-800 text-zinc-200",
-  duplicate: "bg-sky-100 text-sky-800",
+  eligible: "bg-green-100 text-green-700",
+  quarantined: "bg-amber-100 text-amber-700",
+  blocked: "bg-red-100 text-red-700",
+  invalid: "bg-secondary text-muted-foreground",
+  duplicate: "bg-sky-100 text-sky-700",
 };
+
+const SELECT_CLASS =
+  "w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
 
 export default function IngestPage() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -165,223 +171,211 @@ export default function IngestPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-8 font-sans">
-      <h1 className="text-2xl font-semibold">Lead Ingestion</h1>
-      <p className="mt-1 text-sm text-zinc-500">
-        Upload a vendor list → map columns → review the honest callable count →
-        commit. No row is dial-eligible until you confirm.
-      </p>
+    <main className="mx-auto max-w-4xl p-8">
+      <header className="rise" style={{ "--rise-delay": "80ms" } as React.CSSProperties}>
+        <p className="eyebrow">Admin</p>
+        <h1 className="font-display mt-1 text-2xl">Lead ingestion</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Upload a vendor list → map columns → review the honest callable count →
+          commit. No row is dial-eligible until you confirm.
+        </p>
+      </header>
 
-      <Steps step={step} />
+      <div className="rise" style={{ "--rise-delay": "160ms" } as React.CSSProperties}>
+        <Steps step={step} />
+      </div>
 
-      {error && (
-        <div className="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-
-      {step === 1 && (
-        <form onSubmit={handleUpload} className="mt-6 space-y-4">
-          <label className="block text-sm font-medium">
-            Vendor / source name (optional — remembers your column mapping)
-            <input
-              value={vendor}
-              onChange={(e) => setVendor(e.target.value)}
-              placeholder="e.g. AcmeListVendor"
-              className="mt-1 block w-full rounded-md border border-zinc-700 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Lead file (.csv / .xlsx)
-            <input
-              type="file"
-              name="file"
-              accept=".csv,.xlsx,.xls"
-              className="mt-1 block w-full text-sm"
-            />
-          </label>
-          <input type="hidden" name="vendor" value={vendor} />
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {busy ? "Parsing…" : "Upload & detect columns"}
-          </button>
-        </form>
-      )}
-
-      {step === 2 && upload && (
-        <div className="mt-6">
-          <p className="text-sm text-zinc-300">
-            <strong>{upload.filename}</strong> —{" "}
-            {upload.rowCount.toLocaleString()} rows, {upload.headers.length}{" "}
-            columns detected.
-            {upload.usedSavedTemplate && (
-              <span className="ml-2 rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-800">
-                auto-mapped from saved template
-              </span>
-            )}
-          </p>
-          <div className="mt-4 space-y-3">
-            {FIELDS.map((f) => (
-              <div key={f.key} className="flex items-center gap-3">
-                <label className="w-40 text-sm font-medium">
-                  {f.label}
-                  {f.required && <span className="text-red-600"> *</span>}
-                </label>
-                <select
-                  value={mapping[f.key] ?? ""}
-                  onChange={(e) =>
-                    setMapping((m) => ({
-                      ...m,
-                      [f.key]: e.target.value || undefined,
-                    }))
-                  }
-                  className="flex-1 rounded-md border border-zinc-700 px-3 py-2 text-sm"
-                >
-                  <option value="">— not mapped —</option>
-                  {upload.headers.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+      <div className="rise" style={{ "--rise-delay": "240ms" } as React.CSSProperties}>
+        {error && (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-100/60 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleValidate}
-              disabled={busy}
-              className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {busy ? "Validating…" : "Validate & preview report"}
-            </button>
-            <button
-              onClick={reset}
-              className="rounded-md border border-zinc-700 px-4 py-2 text-sm"
-            >
-              Start over
-            </button>
-          </div>
-        </div>
-      )}
+        )}
 
-      {step === 3 && report && (
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold">Pre-import report</h2>
-          <p className="text-sm text-zinc-500">
-            {report.summary.rowCount.toLocaleString()} rows uploaded →{" "}
-            <strong className="text-emerald-700">
-              {report.summary.eligible.toLocaleString()} actually callable
-            </strong>
-            .
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <Stat label="Eligible" value={report.summary.eligible} tone="emerald" />
-            <Stat
-              label="Quarantined"
-              value={report.summary.quarantined}
-              tone="amber"
-            />
-            <Stat label="DNC blocked" value={report.summary.blocked} tone="red" />
-            <Stat label="Invalid" value={report.summary.invalid} tone="zinc" />
-            <Stat
-              label="Duplicates"
-              value={report.summary.duplicates}
-              tone="sky"
-            />
-          </div>
+        {step === 1 && (
+          <form onSubmit={handleUpload} className="mt-6 space-y-4">
+            <label className="block text-sm font-medium">
+              Vendor / source name (optional — remembers your column mapping)
+              <Input
+                value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                placeholder="e.g. AcmeListVendor"
+                className="mt-1"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Lead file (.csv / .xlsx)
+              <Input
+                type="file"
+                name="file"
+                accept=".csv,.xlsx,.xls"
+                className="mt-1"
+              />
+            </label>
+            <input type="hidden" name="vendor" value={vendor} />
+            <Button type="submit" disabled={busy}>
+              {busy ? "Parsing…" : "Upload & detect columns"}
+            </Button>
+          </form>
+        )}
 
-          <div className="mt-6 overflow-x-auto rounded-md border border-zinc-800">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-900 text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Phone (E.164)</th>
-                  <th className="px-3 py-2">Timezone</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.sample.map((r) => (
-                  <tr key={r.rowIndex} className="border-t border-zinc-800">
-                    <td className="px-3 py-2">{r.name ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs">
-                      {r.phone ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-xs">{r.timezone ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs font-medium ${
-                          STATUS_STYLE[r.status] ?? "bg-zinc-800"
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-zinc-500">
-                      {r.reason ?? ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {report.sampleTruncated && (
-            <p className="mt-2 text-xs text-zinc-400">
-              Showing first {report.sample.length} rows. All rows are validated;
-              the full breakdown is committed to the audit trail.
+        {step === 2 && upload && (
+          <div className="mt-6">
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-foreground">{upload.filename}</strong> —{" "}
+              {upload.rowCount.toLocaleString()} rows, {upload.headers.length}{" "}
+              columns detected.
+              {upload.usedSavedTemplate && (
+                <span className="ml-2 rounded-md bg-sky-100 px-2 py-0.5 text-xs text-sky-700">
+                  auto-mapped from saved template
+                </span>
+              )}
             </p>
-          )}
-
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleCommit}
-              disabled={busy}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {busy
-                ? "Committing…"
-                : `Confirm & commit ${report.summary.eligible.toLocaleString()} eligible leads`}
-            </button>
-            <button
-              onClick={() => setStep(2)}
-              className="rounded-md border border-zinc-700 px-4 py-2 text-sm"
-            >
-              Back to mapping
-            </button>
+            <div className="mt-4 space-y-3">
+              {FIELDS.map((f) => (
+                <div key={f.key} className="flex items-center gap-3">
+                  <label className="w-40 text-sm font-medium">
+                    {f.label}
+                    {f.required && <span className="text-destructive"> *</span>}
+                  </label>
+                  <select
+                    value={mapping[f.key] ?? ""}
+                    onChange={(e) =>
+                      setMapping((m) => ({
+                        ...m,
+                        [f.key]: e.target.value || undefined,
+                      }))
+                    }
+                    className={`flex-1 ${SELECT_CLASS}`}
+                  >
+                    <option value="">— not mapped —</option>
+                    {upload.headers.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 flex gap-3">
+              <Button onClick={handleValidate} disabled={busy}>
+                {busy ? "Validating…" : "Validate & preview report"}
+              </Button>
+              <Button onClick={reset} variant="outline">
+                Start over
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {step === 4 && committed && (
-        <div className="mt-6 rounded-md border border-emerald-300 bg-emerald-50 p-6">
-          <h2 className="text-lg font-semibold text-emerald-800">
-            Import committed
-          </h2>
-          <p className="mt-1 text-sm text-emerald-700">
-            Batch <span className="font-mono">{committed.batchId}</span> —{" "}
-            {committed.summary.eligible.toLocaleString()} eligible leads are now
-            dial-ready.{" "}
-            {(
-              committed.summary.quarantined +
-              committed.summary.blocked +
-              committed.summary.invalid +
-              committed.summary.duplicates
-            ).toLocaleString()}{" "}
-            rows retained with rejection reasons for the audit trail.
-          </p>
-          <button
-            onClick={reset}
-            className="mt-4 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white"
-          >
-            Upload another list
-          </button>
-        </div>
-      )}
+        {step === 3 && report && (
+          <div className="mt-6">
+            <h2 className="font-display text-lg">Pre-import report</h2>
+            <p className="text-sm text-muted-foreground">
+              {report.summary.rowCount.toLocaleString()} rows uploaded →{" "}
+              <strong className="text-green-700">
+                {report.summary.eligible.toLocaleString()} actually callable
+              </strong>
+              .
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <Stat label="Eligible" value={report.summary.eligible} tone="green" />
+              <Stat
+                label="Quarantined"
+                value={report.summary.quarantined}
+                tone="amber"
+              />
+              <Stat label="DNC blocked" value={report.summary.blocked} tone="red" />
+              <Stat label="Invalid" value={report.summary.invalid} tone="neutral" />
+              <Stat
+                label="Duplicates"
+                value={report.summary.duplicates}
+                tone="sky"
+              />
+            </div>
+
+            <div className="mt-6 overflow-x-auto rounded-md border border-border">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Phone (E.164)</th>
+                    <th className="px-3 py-2">Timezone</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.sample.map((r) => (
+                    <tr
+                      key={r.rowIndex}
+                      className="border-t border-border/60 transition-colors hover:bg-muted/50"
+                    >
+                      <td className="px-3 py-2">{r.name ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-xs tabular-nums">
+                        {r.phone ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-xs">{r.timezone ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                            STATUS_STYLE[r.status] ??
+                            "bg-secondary text-muted-foreground"
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {r.reason ?? ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {report.sampleTruncated && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Showing first {report.sample.length} rows. All rows are validated;
+                the full breakdown is committed to the audit trail.
+              </p>
+            )}
+
+            <div className="mt-6 flex gap-3">
+              <Button onClick={handleCommit} disabled={busy}>
+                {busy
+                  ? "Committing…"
+                  : `Confirm & commit ${report.summary.eligible.toLocaleString()} eligible leads`}
+              </Button>
+              <Button onClick={() => setStep(2)} variant="outline">
+                Back to mapping
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && committed && (
+          <div className="mt-6 rounded-md border border-green-200 bg-green-100/60 p-6">
+            <h2 className="font-display text-lg text-green-700">Import committed</h2>
+            <p className="mt-1 text-sm text-green-700">
+              Batch <span className="font-mono">{committed.batchId}</span> —{" "}
+              {committed.summary.eligible.toLocaleString()} eligible leads are now
+              dial-ready.{" "}
+              {(
+                committed.summary.quarantined +
+                committed.summary.blocked +
+                committed.summary.invalid +
+                committed.summary.duplicates
+              ).toLocaleString()}{" "}
+              rows retained with rejection reasons for the audit trail.
+            </p>
+            <Button onClick={reset} className="mt-4">
+              Upload another list
+            </Button>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
@@ -397,15 +391,17 @@ function Steps({ step }: { step: number }) {
         return (
           <li
             key={label}
-            className={`flex items-center gap-2 rounded-full px-3 py-1 ${
+            className={`flex items-center gap-2 rounded-md px-3 py-1 font-medium transition-colors ${
               active
-                ? "bg-zinc-900 text-white"
+                ? "bg-primary text-primary-foreground"
                 : done
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-zinc-800 text-zinc-500"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-secondary text-muted-foreground"
             }`}
           >
-            <span className="font-mono text-xs">{done ? "✓" : n}</span>
+            <span className="font-mono text-xs tabular-nums">
+              {done ? "✓" : n}
+            </span>
             {label}
           </li>
         );
@@ -421,19 +417,23 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone: "emerald" | "amber" | "red" | "zinc" | "sky";
+  tone: "green" | "amber" | "red" | "neutral" | "sky";
 }) {
   const tones: Record<string, string> = {
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    amber: "border-amber-200 bg-amber-50 text-amber-800",
-    red: "border-red-200 bg-red-50 text-red-800",
-    zinc: "border-zinc-800 bg-zinc-900 text-zinc-200",
-    sky: "border-sky-200 bg-sky-50 text-sky-800",
+    green: "text-green-700",
+    amber: "text-amber-700",
+    red: "text-red-700",
+    neutral: "text-foreground",
+    sky: "text-sky-700",
   };
   return (
-    <div className={`rounded-md border p-3 ${tones[tone]}`}>
-      <div className="text-2xl font-semibold">{value.toLocaleString()}</div>
-      <div className="text-xs">{label}</div>
+    <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
+      <div className={`font-display text-lg tabular-nums ${tones[tone]}`}>
+        {value.toLocaleString()}
+      </div>
+      <div className="font-mono text-[0.6rem] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
     </div>
   );
 }

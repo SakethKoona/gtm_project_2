@@ -7,11 +7,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* Literal family names: @theme inline resolves at parse time, before the
-     runtime --font-geist-* vars exist. */
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
-  --font-heading: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  /* Shared Transpira ecosystem fonts: Montserrat sans/display + IBM Plex Mono. */
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --font-heading: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -51,74 +51,39 @@
 }
 
 :root {
-  /* Soft white + navy blue theme. Cool off-white surfaces, deep navy ink,
-     navy-blue primary for actions. */
-  --background: oklch(0.985 0.006 247); /* soft cool white */
-  --foreground: oklch(0.28 0.05 264); /* deep navy ink */
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.225 0.013 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.28 0.05 264);
+  --card-foreground: oklch(0.225 0.013 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.28 0.05 264);
-  --primary: oklch(0.37 0.13 264); /* navy blue */
-  --primary-foreground: oklch(0.985 0.01 247);
-  --secondary: oklch(0.955 0.012 247); /* light slate */
-  --secondary-foreground: oklch(0.37 0.13 264);
-  --muted: oklch(0.955 0.012 247);
-  --muted-foreground: oklch(0.53 0.03 262);
-  --accent: oklch(0.93 0.03 255); /* soft blue tint */
-  --accent-foreground: oklch(0.37 0.13 264);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.012 253);
-  --input: oklch(0.9 0.012 253);
-  --ring: oklch(0.37 0.13 264);
-  --chart-1: oklch(0.55 0.16 262);
-  --chart-2: oklch(0.62 0.13 254);
-  --chart-3: oklch(0.48 0.14 266);
-  --chart-4: oklch(0.7 0.1 248);
-  --chart-5: oklch(0.4 0.13 266);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.97 0.01 247);
-  --sidebar-foreground: oklch(0.28 0.05 264);
-  --sidebar-primary: oklch(0.37 0.13 264);
-  --sidebar-primary-foreground: oklch(0.985 0.01 247);
-  --sidebar-accent: oklch(0.93 0.03 255);
-  --sidebar-accent-foreground: oklch(0.37 0.13 264);
-  --sidebar-border: oklch(0.9 0.012 253);
-  --sidebar-ring: oklch(0.37 0.13 264);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --popover-foreground: oklch(0.225 0.013 262);
+  --primary: oklch(0.48 0.12 262);
+  --primary-foreground: oklch(0.99 0.004 250);
+  --secondary: oklch(0.955 0.004 250);
+  --secondary-foreground: oklch(0.225 0.013 262);
+  --muted: oklch(0.955 0.004 250);
+  --muted-foreground: oklch(0.5 0.018 260);
+  --accent: oklch(0.48 0.12 262);
+  --accent-foreground: oklch(0.99 0.004 250);
+  --destructive: oklch(0.6 0.2 25);
+  --destructive-foreground: oklch(0.99 0.004 250);
+  --border: oklch(0.225 0.013 262 / 0.12);
+  --input: oklch(0.225 0.013 262 / 0.16);
+  --ring: oklch(0.48 0.12 262 / 0.45);
+  --chart-1: oklch(0.48 0.12 262);
+  --chart-2: oklch(0.6 0.13 200);
+  --chart-3: oklch(0.68 0.15 145);
+  --chart-4: oklch(0.72 0.15 70);
+  --chart-5: oklch(0.6 0.2 25);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.48 0.12 262);
+  --sidebar-foreground: oklch(0.99 0.004 250);
+  --sidebar-primary: oklch(0.99 0.004 250);
+  --sidebar-primary-foreground: oklch(0.48 0.12 262);
+  --sidebar-accent: oklch(1 0 0 / 0.10);
+  --sidebar-accent-foreground: oklch(0.99 0.004 250);
+  --sidebar-border: oklch(1 0 0 / 0.10);
+  --sidebar-ring: oklch(0.48 0.12 262 / 0.45);
 }
 
 @layer base {
@@ -126,9 +91,66 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
   }
   html {
     @apply font-sans;
+  }
+  ::selection {
+    background: oklch(0.48 0.12 262 / 0.16);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .soft-shadow {
+    box-shadow:
+      0 1px 2px oklch(0.225 0.013 262 / 0.05),
+      0 12px 32px -22px oklch(0.225 0.013 262 / 0.3);
+  }
+
+  .rise {
+    opacity: 0;
+    transform: translateY(14px);
+    animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+}
+
+@keyframes rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .rise {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }

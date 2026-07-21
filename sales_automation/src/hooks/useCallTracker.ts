@@ -241,9 +241,10 @@ export function useCallTracker(repId: string | null) {
     [repId, solo, refetch],
   );
 
-  /** Mark calls as synced to the Sheet (persisted in solo mode). */
+  /** Mark calls synced to the Sheet. Solo → localStorage; rep → API. */
   const markSynced = useCallback(
-    (ids: string[]) => {
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
       setCalls((prev) => {
         const next = prev.map((c) =>
           ids.includes(c.id) ? { ...c, synced: true } : c,
@@ -251,29 +252,57 @@ export function useCallTracker(repId: string | null) {
         if (solo) saveCalls(next);
         return next;
       });
+      if (!solo) {
+        try {
+          await fetch("/api/console/calls", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids }),
+          });
+        } catch {
+          /* optimistic; refetch reconciles */
+        }
+        refetch();
+      }
     },
-    [solo],
+    [solo, refetch],
   );
 
-  /** Delete a saved call (solo mode only — DB history is read-only here). */
+  /** Delete a saved call. Solo → localStorage; rep → API. */
   const deleteCall = useCallback(
-    (id: string) => {
-      if (!solo) return;
+    async (id: string) => {
       setCalls((prev) => {
         const next = prev.filter((c) => c.id !== id);
-        saveCalls(next);
+        if (solo) saveCalls(next);
         return next;
       });
+      if (!solo) {
+        try {
+          await fetch(`/api/console/calls?id=${id}`, { method: "DELETE" });
+        } catch {
+          /* optimistic; refetch reconciles */
+        }
+        refetch();
+      }
     },
-    [solo],
+    [solo, refetch],
   );
 
-  /** Clear all saved calls (solo mode only). */
-  const clearAll = useCallback(() => {
-    if (!solo) return;
+  /** Clear all saved calls. Solo → localStorage; rep → API. */
+  const clearAll = useCallback(async () => {
     setCalls([]);
-    saveCalls([]);
-  }, [solo]);
+    if (solo) {
+      saveCalls([]);
+      return;
+    }
+    if (!repId) return;
+    try {
+      await fetch(`/api/console/calls?repId=${repId}`, { method: "DELETE" });
+    } catch {
+      /* optimistic; refetch reconciles */
+    }
+    refetch();
+  }, [solo, repId, refetch]);
 
   const discardCurrent = useCallback(() => {
     const fresh = freshCall();
@@ -309,10 +338,10 @@ export function useCallTracker(repId: string | null) {
     startIncoming,
     commitCall,
     discardCurrent,
-    refetch,
-    markSynced,
     deleteCall,
     clearAll,
+    markSynced,
+    refetch,
     solo,
   };
 }

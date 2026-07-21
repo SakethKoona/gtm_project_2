@@ -89,13 +89,42 @@ src/lib/
     events.ts       in-process pub/sub for live dashboard (Redis in prod)
   observability/
     metrics.ts      Phase 8: dials/min, human-reach, time-to-human, abandonment…
+  pipeline/
+    service.ts      lead pipeline: list/detail, setStage, logOutcome, follow-ups
+    ledger.ts       contact_ledger read/write (recordFound/Called, phonesInLedger)
 
 src/app/
   page.tsx                       ingestion wizard
   dashboard/page.tsx             live dialer dashboard
+  pipeline/page.tsx              lead pipeline: table + chat-bubble timeline + follow-ups
   api/ingest/{upload,validate,commit}
   api/campaigns/...              CRUD, snapshot, reps, assign-leads, events(SSE), simulate
+  api/leads/...                  list, detail, PATCH stage, POST activity(+follow-up)
+  api/followups/...              pending queue, PATCH done|canceled|snooze
 ```
+
+## Lead pipeline + contact ledger
+
+Every generated lead carries a `pipeline_stage`
+(`new → contacted → follow_up → qualified → won | lost | do_not_contact`).
+`/pipeline` renders each call as chat-bubble activity (`lead_activities`) with a
+prefilled-template composer (`OUTCOME_TEMPLATES` in `config.ts`) and a follow-up
+due queue (`follow_ups`). `logOutcome` is one transaction: insert the activity,
+move the stage (explicit > template > unchanged), set disposition/lastContacted,
+optionally schedule a follow-up; the `do_not_call` template also calls
+`recordOptOut()`. Console call finalize maps rep disposition → template and logs
+the outcome inline.
+
+`contact_ledger` (migration `0004`) is the permanent found/called log keyed by
+E.164 phone, cross-session and independent of the lead row's lifecycle:
+
+- **Ingest** marks ledger-known phones `duplicate`; `commitBatch` upserts a
+  ledger row per eligible inserted lead (never re-found).
+- **Pre-dial** `checkDialable` denies `already_contacted` when `callCount > 0`,
+  unless a `pending` `call` follow-up is due — the queue is the only re-dial
+  path (never accidentally re-called).
+- **Dial-release** (`engine.ts`) and manual console inserts write the "called"
+  ledger row; a completing call clears its matching pending call follow-up.
 
 ## Production deployment shape (unchanged from plan)
 
