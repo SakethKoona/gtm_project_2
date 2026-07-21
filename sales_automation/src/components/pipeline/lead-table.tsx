@@ -89,7 +89,7 @@ export function LeadTable({
           </div>
         ) : (
           <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-card text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-background/80 text-xs uppercase tracking-wide text-muted-foreground backdrop-blur-md">
               <tr className="border-b border-border">
                 <th className="px-2 py-2 font-medium">Lead</th>
                 <th className="px-2 py-2 font-medium">Phone</th>
@@ -105,9 +105,18 @@ export function LeadTable({
                   <tr
                     key={l.id}
                     onClick={() => onSelect(l.id)}
+                    tabIndex={0}
+                    role="button"
+                    aria-selected={selected}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelect(l.id);
+                      }
+                    }}
                     className={cn(
-                      "cursor-pointer border-b border-border/60 transition-colors hover:bg-muted/50",
-                      selected && "bg-muted",
+                      "cursor-pointer border-b border-border/60 outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                      selected && "border-l-2 border-l-accent bg-muted",
                     )}
                   >
                     <td className="px-2 py-2">
@@ -189,10 +198,10 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded px-2 py-0.5 text-xs font-medium transition-colors",
+        "rounded px-2 py-0.5 text-xs font-medium outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
         active
-          ? className ?? "bg-primary text-primary-foreground"
-          : "bg-muted text-muted-foreground hover:bg-muted/70",
+          ? className ?? "bg-accent text-accent-foreground"
+          : "bg-secondary text-muted-foreground hover:bg-secondary/70",
       )}
     >
       {label}

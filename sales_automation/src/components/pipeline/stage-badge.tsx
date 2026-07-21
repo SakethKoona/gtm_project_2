@@ -15,13 +15,13 @@ export const STAGE_ORDER: Stage[] = [
 ];
 
 export const STAGE_META: Record<Stage, StageMeta> = {
-  new: { label: "New", cls: "bg-sky-500/15 text-sky-400" },
-  contacted: { label: "Contacted", cls: "bg-blue-500/15 text-blue-400" },
-  follow_up: { label: "Follow-up", cls: "bg-amber-500/15 text-amber-400" },
-  qualified: { label: "Qualified", cls: "bg-violet-500/15 text-violet-400" },
-  won: { label: "Won", cls: "bg-emerald-500/15 text-emerald-400" },
-  lost: { label: "Lost", cls: "bg-rose-500/15 text-rose-400" },
-  do_not_contact: { label: "Do not contact", cls: "bg-zinc-500/15 text-zinc-400" },
+  new: { label: "New", cls: "bg-sky-100 text-sky-700" },
+  contacted: { label: "Contacted", cls: "bg-accent/10 text-accent" },
+  follow_up: { label: "Follow-up", cls: "bg-amber-100 text-amber-700" },
+  qualified: { label: "Qualified", cls: "bg-purple-100 text-purple-700" },
+  won: { label: "Won", cls: "bg-green-100 text-green-700" },
+  lost: { label: "Lost", cls: "bg-red-100 text-red-700" },
+  do_not_contact: { label: "Do not contact", cls: "bg-secondary text-muted-foreground" },
 };
 
 export function stageLabel(stage: Stage): string {

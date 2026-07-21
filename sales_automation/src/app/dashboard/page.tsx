@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 type Campaign = { id: string; name: string; overdialRatio: string };
 type Rep = {
@@ -146,14 +147,20 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl p-6 font-sans">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Dialer Dashboard</h1>
+    <main className="mx-auto max-w-6xl p-6">
+      <div
+        className="rise flex flex-wrap items-center justify-between gap-3"
+        style={{ "--rise-delay": "80ms" } as React.CSSProperties}
+      >
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h1 className="font-display text-2xl">Dialer Dashboard</h1>
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <select
             value={selected ?? ""}
             onChange={(e) => setSelected(e.target.value)}
-            className="rounded-md border border-zinc-700 px-3 py-1.5"
+            className="rounded-md border border-input bg-card px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {campaigns.length === 0 && <option value="">No campaigns</option>}
             {campaigns.map((c) => (
@@ -162,19 +169,23 @@ export default function Dashboard() {
               </option>
             ))}
           </select>
-          <Btn onClick={createCampaign}>+ Campaign</Btn>
-          <Btn onClick={assignLeads}>Assign eligible leads</Btn>
-          <Btn onClick={addRep}>+ Rep</Btn>
-          <Btn onClick={runBatch} primary>
-            ▶ Run simulated batch
-          </Btn>
+          <Button variant="outline" onClick={createCampaign}>
+            + Campaign
+          </Button>
+          <Button variant="outline" onClick={assignLeads}>
+            Assign eligible leads
+          </Button>
+          <Button variant="outline" onClick={addRep}>
+            + Rep
+          </Button>
+          <Button onClick={runBatch}>▶ Run simulated batch</Button>
         </div>
       </div>
 
       {!snap && (
-        <p className="mt-8 text-sm text-zinc-500">
+        <p className="mt-8 text-sm text-muted-foreground">
           Create a campaign, assign eligible leads (upload some on the{" "}
-          <Link className="underline" href="/">
+          <Link className="text-accent underline" href="/">
             ingestion page
           </Link>{" "}
           first), add a rep or two, then run a simulated batch.
@@ -183,7 +194,10 @@ export default function Dashboard() {
 
       {snap && (
         <>
-          <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <section
+            className="rise mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7"
+            style={{ "--rise-delay": "160ms" } as React.CSSProperties}
+          >
             <Tile label="Queue depth" value={snap.queueDepth} />
             <Tile label="Free reps" value={gov?.freeReps ?? snap.freeReps} />
             <Tile label="Active dials" value={gov?.activeDials ?? 0} />
@@ -200,34 +214,37 @@ export default function Dashboard() {
             />
           </section>
 
-          <section className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <section
+            className="rise mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3"
+            style={{ "--rise-delay": "240ms" } as React.CSSProperties}
+          >
             <div className="lg:col-span-1">
               <H>Reps</H>
               <div className="space-y-2">
                 {snap.reps.length === 0 && (
-                  <p className="text-sm text-zinc-400">No reps yet.</p>
+                  <p className="text-sm text-muted-foreground">No reps yet.</p>
                 )}
                 {snap.reps.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between rounded-md border border-zinc-800 px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
                   >
                     <div>
                       <div className="font-medium">{r.name}</div>
-                      <div className="text-xs text-zinc-400">{r.phone}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{r.phone}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       {r.onCall && (
-                        <span className="rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-700">
+                        <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
                           on call
                         </span>
                       )}
                       <button
                         onClick={() => togglePresence(r)}
-                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                        className={`rounded-md px-2 py-0.5 text-xs font-medium outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98] ${
                           r.presence === "available"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-zinc-800 text-zinc-300"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-secondary text-muted-foreground"
                         }`}
                       >
                         {r.presence}
@@ -240,9 +257,9 @@ export default function Dashboard() {
 
             <div className="lg:col-span-2">
               <H>Live feed (screen-pops &amp; call states)</H>
-              <div className="h-64 overflow-y-auto rounded-md border border-zinc-800 p-2 text-sm">
+              <div className="h-64 overflow-y-auto rounded-md border border-border bg-card p-2 font-mono text-sm">
                 {feed.length === 0 && (
-                  <p className="text-zinc-400">
+                  <p className="text-muted-foreground">
                     Run a batch to see live hand-offs.
                   </p>
                 )}
@@ -250,21 +267,19 @@ export default function Dashboard() {
                   e.type === "screen_pop" ? (
                     <div
                       key={i}
-                      className="mb-1 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2"
+                      className="mb-1 rounded-md border border-green-200 bg-green-100 px-3 py-2 text-green-700"
                     >
-                      <span className="font-semibold text-emerald-800">
-                        📞 Screen-pop:
-                      </span>{" "}
+                      <span className="font-semibold">📞 Screen-pop:</span>{" "}
                       {e.lead.name ?? "Unknown"} — {e.lead.company ?? "?"} (
                       {e.lead.phone})
                       {e.lead.notes && (
-                        <span className="text-zinc-500"> · {e.lead.notes}</span>
+                        <span className="text-green-700/70"> · {e.lead.notes}</span>
                       )}
                     </div>
                   ) : e.type === "call_state" ? (
-                    <div key={i} className="px-2 py-0.5 text-xs text-zinc-500">
+                    <div key={i} className="px-2 py-0.5 text-xs text-muted-foreground">
                       {new Date(e.at).toLocaleTimeString()} · call{" "}
-                      {e.callId.slice(0, 8)} → <b>{e.state}</b>
+                      {e.callId.slice(0, 8)} → <b className="text-foreground">{e.state}</b>
                     </div>
                   ) : null,
                 )}
@@ -272,31 +287,37 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <section className="mt-4">
+          <section
+            className="rise mt-4"
+            style={{ "--rise-delay": "240ms" } as React.CSSProperties}
+          >
             <H>Recent calls</H>
-            <div className="overflow-x-auto rounded-md border border-zinc-800">
+            <div className="overflow-x-auto rounded-md border border-border bg-card">
               <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-900 text-xs uppercase text-zinc-500">
+                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2">Phone</th>
-                    <th className="px-3 py-2">Final</th>
-                    <th className="px-3 py-2">Disposition</th>
-                    <th className="px-3 py-2">Time→human</th>
-                    <th className="px-3 py-2">Timeline</th>
+                    <th className="px-3 py-2 font-medium">Phone</th>
+                    <th className="px-3 py-2 font-medium">Final</th>
+                    <th className="px-3 py-2 font-medium">Disposition</th>
+                    <th className="px-3 py-2 font-medium">Time→human</th>
+                    <th className="px-3 py-2 font-medium">Timeline</th>
                   </tr>
                 </thead>
                 <tbody>
                   {snap.calls.map((c) => (
-                    <tr key={c.id} className="border-t border-zinc-800">
-                      <td className="px-3 py-2 font-mono text-xs">{c.phone}</td>
+                    <tr
+                      key={c.id}
+                      className="border-t border-border/60 hover:bg-muted/50"
+                    >
+                      <td className="px-3 py-2 font-mono text-xs tabular-nums">{c.phone}</td>
                       <td className="px-3 py-2">{c.finalState}</td>
-                      <td className="px-3 py-2 text-xs text-zinc-500">
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
                         {c.disposition}
                       </td>
-                      <td className="px-3 py-2 text-xs">
+                      <td className="px-3 py-2 font-mono text-xs tabular-nums">
                         {c.timeToHumanMs != null ? `${c.timeToHumanMs}ms` : "—"}
                       </td>
-                      <td className="px-3 py-2 text-xs text-zinc-400">
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
                         {(c.timeline ?? []).map((t) => t.state).join(" → ")}
                       </td>
                     </tr>
@@ -311,29 +332,6 @@ export default function Dashboard() {
   );
 }
 
-function Btn({
-  children,
-  onClick,
-  primary,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-        primary
-          ? "bg-emerald-600 text-white"
-          : "border border-zinc-700 text-zinc-200"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function Tile({
   label,
   value,
@@ -345,18 +343,24 @@ function Tile({
 }) {
   return (
     <div
-      className={`rounded-md border p-3 ${
-        danger ? "border-red-300 bg-red-50" : "border-zinc-800 bg-zinc-900"
+      className={`rounded-xl p-3 ${
+        danger
+          ? "border border-red-200 bg-red-100 text-red-700"
+          : "bg-card ring-1 ring-foreground/10"
       }`}
     >
-      <div className={`text-xl font-semibold ${danger ? "text-red-700" : ""}`}>
-        {value}
+      <div className="font-display text-lg">{value}</div>
+      <div
+        className={`font-mono text-[0.6rem] uppercase tracking-wider ${
+          danger ? "text-red-700/80" : "text-muted-foreground"
+        }`}
+      >
+        {label}
       </div>
-      <div className="text-xs text-zinc-500">{label}</div>
     </div>
   );
 }
 
 function H({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-2 mt-2 text-sm font-semibold text-zinc-200">{children}</h2>;
+  return <h2 className="mb-2 mt-2 font-display text-sm text-foreground">{children}</h2>;
 }

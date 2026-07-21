@@ -59,12 +59,15 @@ export default function PipelinePage() {
   return (
     <main className="mx-auto max-w-7xl px-5 py-5">
       {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-primary/15 text-primary">
+      <header className="rise flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
             <GitBranch className="h-4 w-4" />
           </div>
-          <h1 className="text-lg font-semibold">Lead Pipeline</h1>
+          <div>
+            <p className="eyebrow">Pipeline</p>
+            <h1 className="font-display text-xl">Lead pipeline</h1>
+          </div>
         </div>
 
         {/* Stage-count chips + Due now badge */}
@@ -85,7 +88,7 @@ export default function PipelinePage() {
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium",
-              dueNow > 0 ? "bg-rose-500/15 text-rose-400" : "bg-muted text-muted-foreground",
+              dueNow > 0 ? "bg-red-100 text-red-700" : "bg-secondary text-muted-foreground",
             )}
           >
             Due now
@@ -95,14 +98,14 @@ export default function PipelinePage() {
       </header>
 
       {/* Tabs */}
-      <div className="mt-4 flex gap-1.5">
+      <div className="rise mt-4 flex gap-1.5" style={{ "--rise-delay": "80ms" } as React.CSSProperties}>
         <TabButton active={tab === "leads"} onClick={() => setTab("leads")}>
           Leads
         </TabButton>
         <TabButton active={tab === "followups"} onClick={() => setTab("followups")}>
           Follow-ups
           {dueNow > 0 && (
-            <span className="ml-1.5 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">
+            <span className="ml-1.5 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
               {dueNow}
             </span>
           )}
@@ -110,7 +113,10 @@ export default function PipelinePage() {
       </div>
 
       {tab === "leads" ? (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div
+          className="rise mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"
+          style={{ "--rise-delay": "160ms" } as React.CSSProperties}
+        >
           <div className="min-h-[60vh]">
             <LeadTable
               leads={leads}
@@ -135,7 +141,10 @@ export default function PipelinePage() {
           <LeadDetail key={selectedId ?? "none"} leadId={selectedId} onChanged={refreshAll} />
         </div>
       ) : (
-        <div className="mt-4 max-w-3xl">
+        <div
+          className="rise mt-4 max-w-3xl"
+          style={{ "--rise-delay": "160ms" } as React.CSSProperties}
+        >
           <FollowUpQueue refreshKey={queueKey} onOpenLead={openLead} onChanged={loadLeads} />
         </div>
       )}
@@ -157,10 +166,10 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+        "inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
         active
-          ? "border-border bg-card text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
+          ? "bg-accent text-accent-foreground"
+          : "bg-secondary text-muted-foreground hover:text-foreground",
       )}
     >
       {children}

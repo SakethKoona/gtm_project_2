@@ -97,7 +97,7 @@ export function LeadDetail({
               value={lead?.pipelineStage ?? "new"}
               onChange={(e) => changeStage(e.target.value as Stage)}
               disabled={!lead}
-              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring dark:bg-input/30"
+              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring"
             >
               {STAGE_ORDER.map((s) => (
                 <option key={s} value={s}>

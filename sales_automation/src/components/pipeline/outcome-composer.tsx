@@ -179,7 +179,7 @@ export function OutcomeComposer({
             type="button"
             onClick={() => pickTemplate(t)}
             className={cn(
-              "rounded px-2 py-0.5 text-xs font-medium transition-colors",
+              "rounded px-2 py-0.5 text-xs font-medium outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
               templateKey === t.key
                 ? "bg-primary text-primary-foreground"
                 : "bg-primary/15 text-primary hover:bg-primary/25",
@@ -203,7 +203,7 @@ export function OutcomeComposer({
           }}
           rows={2}
           placeholder="Write a call outcome or note… (Enter to send, Shift+Enter for newline)"
-          className="min-h-[42px] w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          className="min-h-[42px] w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         <Button onClick={send} disabled={!body.trim() || sending} className="gap-1.5">
           <Send className="h-4 w-4" />
@@ -211,7 +211,7 @@ export function OutcomeComposer({
         </Button>
       </div>
 
-      {error && <p className="mt-1.5 text-xs font-medium text-rose-400">{error}</p>}
+      {error && <p className="mt-1.5 text-xs font-medium text-destructive">{error}</p>}
 
       {/* Inline follow-up scheduler */}
       {showFollowUp && (
@@ -228,7 +228,7 @@ export function OutcomeComposer({
                 type="button"
                 onClick={() => setChannel("call")}
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 text-xs",
+                  "flex items-center gap-1 px-2 py-1 text-xs outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.98]",
                   channel === "call" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
                 )}
               >
@@ -238,7 +238,7 @@ export function OutcomeComposer({
                 type="button"
                 onClick={() => setChannel("email")}
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 text-xs",
+                  "flex items-center gap-1 px-2 py-1 text-xs outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.98]",
                   channel === "email" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
                 )}
               >
@@ -253,7 +253,7 @@ export function OutcomeComposer({
                 type="button"
                 onClick={() => setPresetKey(p.key)}
                 className={cn(
-                  "rounded px-2 py-1 text-xs font-medium",
+                  "rounded px-2 py-1 text-xs font-medium outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
                   presetKey === p.key
                     ? "bg-primary/20 text-primary"
                     : "bg-muted text-muted-foreground hover:bg-muted/70",
@@ -266,7 +266,7 @@ export function OutcomeComposer({
               type="button"
               onClick={() => setPresetKey("custom")}
               className={cn(
-                "rounded px-2 py-1 text-xs font-medium",
+                "rounded px-2 py-1 text-xs font-medium outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
                 presetKey === "custom"
                   ? "bg-primary/20 text-primary"
                   : "bg-muted text-muted-foreground hover:bg-muted/70",
@@ -279,7 +279,7 @@ export function OutcomeComposer({
                 type="datetime-local"
                 value={customLocal}
                 onChange={(e) => setCustomLocal(e.target.value)}
-                className="rounded-md border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring dark:bg-input/30"
+                className="rounded-md border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring"
               />
             )}
           </div>
@@ -292,7 +292,7 @@ export function OutcomeComposer({
                 ? "Who / what to email (e.g. send pricing to jane@acme.com)"
                 : "Note (optional)"
             }
-            className="mt-2 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            className="mt-2 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
         </div>
       )}

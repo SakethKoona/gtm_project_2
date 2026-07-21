@@ -125,7 +125,7 @@ export function FollowUpQueue({
             key={r.id}
             className={cn(
               "rounded-xl border bg-card p-3",
-              overdue ? "border-rose-500/40" : "border-border",
+              overdue ? "border-red-300" : "border-border",
             )}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -134,8 +134,8 @@ export function FollowUpQueue({
                   className={cn(
                     "grid h-7 w-7 shrink-0 place-items-center rounded-md",
                     r.channel === "call"
-                      ? "bg-sky-500/15 text-sky-400"
-                      : "bg-violet-500/15 text-violet-400",
+                      ? "bg-sky-100 text-sky-700"
+                      : "bg-purple-100 text-purple-700",
                   )}
                 >
                   {r.channel === "call" ? <Phone className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
@@ -153,7 +153,7 @@ export function FollowUpQueue({
                 <span
                   className={cn(
                     "inline-flex items-center gap-1 text-xs",
-                    overdue ? "font-medium text-rose-400" : "text-muted-foreground",
+                    overdue ? "font-medium text-red-700" : "text-muted-foreground",
                   )}
                 >
                   <Timer className="h-3 w-3" />
