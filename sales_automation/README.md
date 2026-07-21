@@ -1,17 +1,37 @@
-# Sales Automation — Parallel Dialer + IVR-Escape Tool
+# Transpira GTM — Unified Frontend
 
-Implementation of the spec in [`specs.md`](./specs.md), sequenced by
-[`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md).
+The one unified frontend for outbound GTM: lead ingestion, a keyboard-driven
+call console, a lead pipeline, and the admin dialer dashboard — all behind a
+single cobalt-railed shell. Implementation of the spec in [`specs.md`](./specs.md),
+sequenced by [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md).
 
 **Status: all 8 phases built and verified.** The telephony half (Phases 3–7) runs
 against a **simulated** telephony provider — the orchestration is real and tested
 end-to-end without a carrier. See **`SYSTEM_OVERVIEW.md`** for the as-built
 architecture, module map, and how to run the dashboard + simulation.
 
-Two entry points:
-- **`/`** — lead ingestion wizard (this file's focus below).
-- **`/dashboard`** — live dialer dashboard; **`npm run sim`** runs a headless
-  end-to-end simulation.
+## The four surfaces
+
+Every route lives under the same nav shell:
+
+- **`/` — Leads** — the lead ingestion wizard (this file's focus below).
+- **`/console` — Call console** — the keyboard-driven live call console. This
+  surface **absorbed the standalone call time tracker** (`../automated_time_tracker`):
+  the timer state machine, the `1`–`6`/`Space`/`0`/`Enter` shortcuts, the
+  disposition tagging, aggregate stat tiles, CSV export, Google Sheets sync, and
+  history management all come from it. History is now server-backed (per rep,
+  via `/api/console/calls`) and a bridged call from the dialer screen-pops the
+  console and auto-starts the timer.
+- **`/pipeline` — Pipeline** — lead management workspace (see below).
+- **`/dashboard` — Dialer dashboard** — admin dialer ops console; **`npm run sim`**
+  runs a headless end-to-end simulation.
+
+### Design system
+
+The app uses the shared **Transpira design system** — Montserrat headings, IBM
+Plex Mono for numerics/labels, a single cobalt accent on quiet white cards — so
+it reads as a sibling of `../platform`, `../build`, and
+[transpiralabs.com](https://transpiralabs.com).
 
 ## Stack (Phase 1)
 

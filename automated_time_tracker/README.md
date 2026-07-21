@@ -1,5 +1,13 @@
 # Call Time Tracker
 
+> **Deprecated — superseded by the unified app's `/console`.**
+> This standalone tracker has been folded into **Transpira GTM**
+> ([`../sales_automation`](../sales_automation)) as the **Call console** surface
+> (`/console`), where its timer, keyboard shortcuts, dispositions, stats, CSV
+> export, and Sheets sync now live alongside the pipeline and dialer with
+> server-backed, per-rep history. It is kept here only for reference and
+> standalone/offline use — new work should target `/console`.
+
 A keyboard-driven stopwatch that breaks down where your call time goes — ringing,
 waiting/hold, right person, wrong person, voicemail, dead — with exactly one
 timer running at a time. Built with **Next.js (App Router) + TypeScript +

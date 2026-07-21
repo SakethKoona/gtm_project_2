@@ -1,41 +1,54 @@
-# GTM Project
+# Transpira GTM
 
-Go-to-market tooling for outbound sales: a compliance-gated parallel dialer and
-a rep-facing call time tracker. Two independent Next.js + TypeScript apps live
-in this repo:
+Go-to-market tooling for outbound sales. The repo now ships **one unified
+frontend — Transpira GTM** ([`sales_automation/`](./sales_automation)) — a
+Next.js + TypeScript app that puts the whole rep + admin workflow behind a
+single cobalt-railed shell:
 
-| App | What it is |
-|-----|------------|
-| [`sales_automation/`](./sales_automation) | Outbound dialer platform — lead ingestion, pre-dial compliance gating, parallel dialing (simulated or real via Twilio), IVR navigation, rep hand-off, FCC abandonment governance, live dashboard. |
-| [`automated_time_tracker/`](./automated_time_tracker) | Keyboard-driven call console/stopwatch that breaks down where a rep's call time goes, with dispositions, stats, CSV export, and optional Google Sheets sync. |
+| Surface | Route | What it is |
+|---------|-------|------------|
+| **Leads** | `/` | Lead ingestion wizard — upload → map columns → pre-dial compliance report → commit. |
+| **Call console** | `/console` | Keyboard-driven live call console (the former standalone time tracker): one running timer, six state buckets, dispositions, aggregate stats, server-backed history. Dialer screen-pop auto-starts the timer on a bridged call. |
+| **Pipeline** | `/pipeline` | Lead management workspace — stageed lead table, per-lead activity timeline, outcome composer, and a follow-up queue. |
+| **Dialer dashboard** | `/dashboard` | Admin dialer ops — KPI tiles, rep presence, live SSE call feed, campaign controls, and FCC abandonment governance. |
 
-The apps are not yet wired together, but the time tracker is designed as the
-rep workstation the dialer will eventually hand bridged calls off to.
+The [`automated_time_tracker/`](./automated_time_tracker) app is retained as the
+**legacy standalone tracker** — the prototype the `/console` surface was built
+from. It is **superseded by `/console`** and kept only for reference / offline
+standalone use.
 
 ## Quick start
 
-Each app is self-contained — `cd` in and follow its README:
+Transpira GTM needs a local Postgres. A `docker-compose.yml` brings one up on
+port **5433**.
 
 ```bash
-# Call time tracker (no external services needed)
-cd automated_time_tracker
-npm install
-npm run dev            # http://localhost:3000
-
-# Sales automation (needs local Postgres; runs in $0 simulation mode by default)
 cd sales_automation
-createdb sales_automation
+
+# 1. start Postgres (docker) on localhost:5433
+docker compose up -d
+
+# 2. point .env at it
+#    DATABASE_URL=postgres://sales:sales@localhost:5433/sales_automation
+
+# 3. install deps
 npm install
+
+# 4. apply schema
 npm run db:migrate
+
+# 5. run
 npm run dev            # http://localhost:3000
 ```
 
-Requires Node 20+.
+Requires Node 20+. The telephony half runs in `$0` simulation mode by default —
+no carrier required. See [`sales_automation/README.md`](./sales_automation/README.md)
+for details and alternative (Homebrew) Postgres setup.
 
 ## Documentation
 
-- [`sales_automation/README.md`](./sales_automation/README.md) — setup and the
-  lead-ingestion pipeline
+- [`sales_automation/README.md`](./sales_automation/README.md) — the unified
+  frontend, its four surfaces, setup, and the lead-ingestion pipeline
 - [`sales_automation/SYSTEM_OVERVIEW.md`](./sales_automation/SYSTEM_OVERVIEW.md) —
   as-built architecture and module map
 - [`sales_automation/TELEPHONY_RUNBOOK.md`](./sales_automation/TELEPHONY_RUNBOOK.md) —
@@ -44,9 +57,9 @@ Requires Node 20+.
   [`IMPLEMENTATION_PLAN.md`](./sales_automation/IMPLEMENTATION_PLAN.md) — original
   spec and phase plan
 - [`automated_time_tracker/README.md`](./automated_time_tracker/README.md) —
-  usage, keyboard shortcuts, and project structure
+  the legacy standalone tracker (superseded by `/console`)
 - [`automated_time_tracker/SHEETS_SETUP.md`](./automated_time_tracker/SHEETS_SETUP.md) —
-  Google Sheets live-sync setup
+  Google Sheets live-sync setup for the standalone tracker
 
 ## Legal / compliance disclaimer
 
