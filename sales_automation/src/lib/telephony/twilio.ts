@@ -49,31 +49,38 @@ export class TwilioTelephonyProvider implements TelephonyProvider {
 
   async placeCall(to: string, from?: string): Promise<OutboundHandle> {
     const conf = `lead-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    // Connect-on-answer mode: bridge the rep the instant the call is answered
+    // (see the /status handler), skipping AMD entirely. Fastest time-to-human and
+    // no false "voicemail" drops — the rep just hangs up on the rare machine.
+    const connectOnAnswer = process.env.DIAL_CONNECT_ON_ANSWER === "true";
+
+    const amd = connectOnAnswer
+      ? {}
+      : {
+          // "Enable" decides human-vs-machine fast and biases toward real people.
+          machineDetection: "Enable" as const,
+          // Max seconds AMD analyzes before "unknown" (min 3). "unknown" connects.
+          machineDetectionTimeout: 3,
+          // Flag a machine only after this much continuous speech (above the 2400ms
+          // default so a normal greeting isn't mistaken for a machine).
+          machineDetectionSpeechThreshold: 4000,
+          // Silence after the greeting to conclude "human" — bridge as they stop.
+          machineDetectionSpeechEndThreshold: 800,
+          // Silence if they answer and say nothing — connect a quiet human faster.
+          machineDetectionSilenceTimeout: 3000,
+          asyncAmd: "true" as const,
+          asyncAmdStatusCallback: `${this.publicUrl}/amd`,
+          asyncAmdStatusCallbackMethod: "POST" as const,
+        };
+
     const call = await this.client.calls.create({
       to,
       from: from || this.from,
       // On answer, Twilio fetches TwiML that forks media + parks in a silent conf.
       url: `${this.publicUrl}/twiml/outbound?conf=${encodeURIComponent(conf)}`,
       method: "POST",
-      // Twilio AMD gives a first-pass human/machine label via async callback.
-      // We NEVER leave voicemails (no audio to the lead), so we don't need
-      // "DetectMessageEnd" (which waits for a whole greeting to finish and often
-      // mislabels a live "hello?" as a machine). "Enable" decides human-vs-machine
-      // as fast as possible and biases toward connecting real people.
-      machineDetection: "Enable",
-      // Max time AMD analyzes before returning "unknown". If it can't decide, our
-      // /amd handler connects anyway (treats unknown as human), so keep this short
-      // to minimize dead air for the person who answered.
-      machineDetectionTimeout: 5,
-      // A machine is flagged only after this much *continuous* speech. Raised well
-      // above the 2400ms default so a normal human greeting ("Hi, this is Bob, how
-      // can I help you?") isn't mistaken for a machine reading a message.
-      machineDetectionSpeechThreshold: 4000,
-      machineDetectionSpeechEndThreshold: 1500,
-      machineDetectionSilenceTimeout: 5000,
-      asyncAmd: "true",
-      asyncAmdStatusCallback: `${this.publicUrl}/amd`,
-      asyncAmdStatusCallbackMethod: "POST",
+      ...amd,
       statusCallback: `${this.publicUrl}/status`,
       statusCallbackEvent: ["answered", "completed"],
       statusCallbackMethod: "POST",
@@ -151,6 +158,24 @@ export class TwilioTelephonyProvider implements TelephonyProvider {
   async bridge(_callId: string, _repId: string): Promise<void> {
     // Bridging is implicit: the winning rep joins the lead's conference. Losing
     // rep legs are hung up by the server's rep-status handler. Nothing to do.
+  }
+
+  async releaseReps(callId: string): Promise<void> {
+    // Hang up every rep leg rung for this call (a pre-rung rep parked in the
+    // conference), leaving the lead call untouched. Already-completed legs no-op.
+    const session = getSession(callId);
+    const repSids = session?.repRace?.repCallSids;
+    if (!repSids) return;
+    await Promise.all(
+      [...repSids.keys()].map((repCallSid) =>
+        this.client
+          .calls(repCallSid)
+          .update({ status: "completed" })
+          .catch(() => {}),
+      ),
+    );
+    // Settle the race so a late "answered" callback can't resolve a dead handoff.
+    if (session?.repRace) session.repRace.settled = true;
   }
 
   async hangup(callId: string): Promise<void> {

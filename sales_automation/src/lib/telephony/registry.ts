@@ -23,6 +23,8 @@ export type CallSession = {
     settled: boolean;
   } | null;
   amdReported: boolean;
+  /** Set once the lead-answered ("answered") event has been emitted. */
+  answeredReported: boolean;
 };
 
 const sessions = new Map<string, CallSession>();
@@ -36,6 +38,7 @@ export function createSession(callSid: string, conferenceName: string): CallSess
     events: new AsyncQueue<MediaEvent>(),
     repRace: null,
     amdReported: false,
+    answeredReported: false,
     };
   sessions.set(callSid, s);
   return s;

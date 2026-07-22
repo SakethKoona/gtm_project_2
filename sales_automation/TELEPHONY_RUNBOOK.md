@@ -71,13 +71,30 @@ What happens:
 1. Twilio calls your **lead** phone from your Twilio number.
 2. On answer, Twilio hits `/twiml/outbound` → forks audio to `/media` and parks
    the lead in a **silent** conference (no audio played to the lead).
-3. Twilio **AMD** posts to `/amd` → `human` emits a HUMAN event into the state
-   machine (a machine emits VOICEMAIL and the call hangs up).
-4. On HUMAN, the hand-off rings your **rep** phone; answering it drops you into
-   the same conference — **you're now talking to the lead**. A whisper announces
-   the lead in the rep's ear first.
+3. The instant the lead answers, the hand-off **pre-rings your rep in parallel**
+   with detection: the rep answers and is parked (waiting) in the same silent
+   conference. Browser-softphone reps auto-answer; a whisper announces the lead
+   in the rep's ear first.
+4. Twilio **AMD** posts to `/amd` → `human` **confirms the bridge** — the rep is
+   already there, so **you're talking to the lead with ~0 wait**. A machine emits
+   VOICEMAIL instead: the parked rep is released and the call hangs up.
 5. The attempt (timeline, disposition, time-to-human) is written to
    `call_attempts`; the dashboard shows the screen-pop + metrics.
+
+### Low-latency bridging (pre-ring at answer)
+
+The rep is staged **before** a human is confirmed so the customer isn't left in
+silence waiting for a fresh dial. This trades some rep idle time for near-zero
+customer wait:
+
+- The rep is reserved (`onCall`) the moment they answer the pre-ring, so the
+  engine can't double-assign a parked rep during AMD/IVR navigation.
+- On voicemail / dead / IVR give-up / hold-timeout, the parked rep is released
+  (`provider.releaseReps`) — no stranded rep, no stray `bridged` attempt.
+- Rep economics: a rep is tied up during the AMD/IVR window even on calls that
+  turn out to be machines (they hang up), and predictive overdial trends toward
+  1:1. Toggle `DIAL_CONNECT_ON_ANSWER=true` to skip AMD entirely (fastest, but
+  reps occasionally land on a voicemail/IVR).
 
 ## Where to watch / debug
 
@@ -94,10 +111,11 @@ What happens:
 |---|---|
 | Outbound call, answer, silent conference park | **Real** (Twilio) |
 | Human/voicemail detection | **Real** via Twilio AMD |
-| Simultaneous rep ring, first-answer bridge, rep whisper | **Real** (conference) |
+| Pre-ring at answer, first-answer bridge, rep whisper | **Real** (conference) |
+| Browser softphone (Twilio Voice SDK, auto-answer) | **Real** — needs `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` |
 | Screen-pop, metrics, compliance gate, governor | **Real** (reused from sim path) |
-| Live IVR "press 1" navigation | Needs a `DEEPGRAM_API_KEY` + the STT impl in `src/lib/classifier/stt.ts` (interface ready, Deepgram websocket left as a marked TODO) |
-| National/state DNC scrub | Still a stub — wire a real provider before any live campaign |
+| Live IVR "press 1" navigation | **Real** with a `DEEPGRAM_API_KEY` (streaming STT in `src/lib/classifier/stt.ts`); AMD-only without a key |
+| National/state DNC scrub | Stub — deliberately skipped (business-only dialing); internal suppression list is real |
 
 ## Going fully open-source (no Twilio)
 

@@ -69,6 +69,14 @@ export const callStateEnum = pgEnum("call_state", [
 export const repPresenceEnum = pgEnum("rep_presence", ["available", "away"]);
 
 /**
+ * How a rep takes calls:
+ *  - `phone`   — a real phone number the dialer bridges to (admin-added custom rep).
+ *  - `browser` — an in-app WebRTC softphone (Twilio Voice SDK). Identity is
+ *    `rep_<userId>`; presence is derived from being logged in + a live heartbeat.
+ */
+export const repKindEnum = pgEnum("rep_kind", ["phone", "browser"]);
+
+/**
  * Auth roles. New signups default to `none` (no access — they see a "pending
  * access" page). An admin promotes them to `rep` (call console only) or `admin`
  * (everything, and can act as a rep). See src/lib/auth.
@@ -272,7 +280,12 @@ export const campaigns = pgTable("campaigns", {
 export const reps = pgTable("reps", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  phone: text("phone").notNull(), // E.164 rep phone (or WebRTC identity)
+  // Phone reps only. Browser reps have no number (identity = rep_<userId>).
+  phone: text("phone"),
+  kind: repKindEnum("kind").notNull().default("phone"),
+  // Browser reps link to their user; presence follows login + heartbeat.
+  userId: uuid("user_id"),
+  lastSeen: timestamp("last_seen", { withTimezone: true }),
   presence: repPresenceEnum("presence").notNull().default("away"),
   // true while bridged to a lead — a busy rep is not "free" even if available.
   onCall: boolean("on_call").notNull().default(false),

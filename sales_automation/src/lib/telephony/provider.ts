@@ -14,6 +14,7 @@
 
 export type MediaEvent =
   | { type: "ringing" }
+  | { type: "answered" }
   | { type: "audio"; label: AudioLabel; transcript?: string }
   | { type: "hangup" };
 
@@ -56,6 +57,13 @@ export interface TelephonyProvider {
 
   /** Bridge the lead call to the answered rep leg. */
   bridge(callId: string, repId: string): Promise<void>;
+
+  /**
+   * Hang up any rep legs rung for this call WITHOUT ending the lead call. Used to
+   * release a pre-rung (parked) rep when the call turns out not to be a human
+   * (voicemail/dead), so the rep isn't left alone in the conference.
+   */
+  releaseReps(callId: string): Promise<void>;
 
   /** Tear down a call. */
   hangup(callId: string): Promise<void>;

@@ -120,12 +120,40 @@ app.post("/amd", async (req, reply) => {
   return reply.send("ok");
 });
 
-// ── Lead call status: on completion, close the session (ends its event stream).
+// ── Lead call status.
+//  - Connect-on-answer mode: the instant the call is answered ("in-progress"),
+//    emit HUMAN so the orchestrator bridges a rep immediately — no AMD wait. This
+//    is the fastest possible time-to-human (just ring time).
+//  - On completion/no-answer/busy/failed: close the session (ends its stream).
+const CONNECT_ON_ANSWER = process.env.DIAL_CONNECT_ON_ANSWER === "true";
 app.post("/status", async (req, reply) => {
   const b = req.body as { CallSid?: string; CallStatus?: string };
-  if (b.CallSid && (b.CallStatus === "completed" || b.CallStatus === "no-answer" || b.CallStatus === "busy" || b.CallStatus === "failed")) {
-    const session = getSession(b.CallSid);
-    session?.events.push({ type: "hangup" });
+  const session = b.CallSid ? getSession(b.CallSid) : undefined;
+
+  if (b.CallStatus === "in-progress" && session) {
+    // Lead answered. Tell the orchestrator so it can pre-ring a rep into the
+    // conference NOW — in parallel with AMD / IVR navigation — so the rep is
+    // already parked when a human is reached (near-zero customer silence).
+    if (!session.answeredReported) {
+      session.answeredReported = true;
+      session.events.push({ type: "answered" });
+    }
+    // Connect-on-answer: also bridge immediately (no AMD wait).
+    if (CONNECT_ON_ANSWER && !session.amdReported) {
+      session.amdReported = true; // so a stray AMD callback can't double-fire
+      app.log.info(`connect-on-answer: bridging ${b.CallSid} on answer (no AMD)`);
+      session.events.push({ type: "audio", label: "human_greeting" });
+    }
+  }
+
+  if (
+    session &&
+    (b.CallStatus === "completed" ||
+      b.CallStatus === "no-answer" ||
+      b.CallStatus === "busy" ||
+      b.CallStatus === "failed")
+  ) {
+    session.events.push({ type: "hangup" });
   }
   return reply.send("ok");
 });

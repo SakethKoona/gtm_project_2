@@ -1,6 +1,41 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, reps, leads } from "@/db/schema";
+
+/** A browser rep is "online" if it heartbeat within this window. */
+const ONLINE_WINDOW = "30 seconds";
+
+/** The Twilio Voice SDK client identity for a browser rep (from its user). */
+export function repClientIdentity(userId: string): string {
+  return `rep_${userId}`;
+}
+
+/**
+ * Ensure a browser (softphone) rep row exists for a logged-in user, and return
+ * it. Browser reps are global (no campaignId) — any online one can take a call.
+ */
+export async function ensureBrowserRep(userId: string, name: string) {
+  const existing = (
+    await db.select().from(reps).where(eq(reps.userId, userId))
+  )[0];
+  if (existing) return existing;
+  const [row] = await db
+    .insert(reps)
+    .values({ name, kind: "browser", userId, presence: "away" })
+    .returning();
+  return row;
+}
+
+/** Heartbeat a browser rep: online → available + fresh lastSeen, else away. */
+export async function setBrowserPresence(userId: string, online: boolean) {
+  await db
+    .update(reps)
+    .set({
+      presence: online ? "available" : "away",
+      lastSeen: online ? new Date() : null,
+    })
+    .where(eq(reps.userId, userId));
+}
 
 type NewCampaign = Partial<typeof campaigns.$inferInsert> & { name: string };
 
@@ -50,14 +85,28 @@ export async function setRepOnCall(repId: string, onCall: boolean) {
  * the concurrency governor (freeReps * OVERDIAL_RATIO).
  */
 export async function listFreeReps(campaignId: string) {
+  // Free = not on a call, AND either:
+  //  - a phone rep assigned to this campaign and marked available, OR
+  //  - a browser rep that is online (heartbeat within the window). Browser reps
+  //    are a global pool — any online one can take a call for any campaign.
   return db
     .select()
     .from(reps)
     .where(
       and(
-        eq(reps.campaignId, campaignId),
-        eq(reps.presence, "available"),
         eq(reps.onCall, false),
+        or(
+          and(
+            eq(reps.kind, "phone"),
+            eq(reps.campaignId, campaignId),
+            eq(reps.presence, "available"),
+          ),
+          and(
+            eq(reps.kind, "browser"),
+            eq(reps.presence, "available"),
+            gte(reps.lastSeen, sql`now() - interval '${sql.raw(ONLINE_WINDOW)}'`),
+          ),
+        ),
       ),
     );
 }

@@ -15,6 +15,7 @@ import { BucketGrid } from "@/components/bucket-grid";
 import { StatCards } from "@/components/stat-cards";
 import { HistoryTable } from "@/components/history-table";
 import { SyncPanel } from "@/components/sync-panel";
+import { Softphone } from "@/components/softphone";
 import { Button } from "@/components/ui/button";
 import { BUCKETS } from "@/lib/config";
 import { fmtMs } from "@/lib/format";
@@ -84,6 +85,14 @@ export default function ConsolePage() {
           </Button>
         )}
       </header>
+
+      {/* In-browser softphone — registers this logged-in rep and takes calls
+          the dialer bridges here. Presence follows it (online = available). */}
+      {!solo && (
+        <div className="mt-4">
+          <Softphone />
+        </div>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* Live call */}

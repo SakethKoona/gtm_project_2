@@ -41,6 +41,9 @@ export class HeuristicClassifier implements CallStateClassifier {
   classify(event: MediaEvent): Classification | null {
     if (event.type === "ringing") return { state: "RINGING" };
     if (event.type === "hangup") return { state: "DEAD" };
+    // "answered" is handled by the orchestrator directly (pre-ring trigger); it
+    // carries no audio to classify.
+    if (event.type === "answered") return null;
 
     // event.type === "audio"
     const t = event.transcript ?? "";
@@ -54,7 +57,11 @@ export class HeuristicClassifier implements CallStateClassifier {
       case "human_greeting":
         return { state: "HUMAN", transcript: t };
       case "silence":
-        return { state: "DEAD" };
+        // "silence" is also the neutral label the STT path uses to hand us a raw
+        // transcript. If words came through, fall to the keyword heuristic below;
+        // only truly empty silence is DEAD.
+        if (!t) return { state: "DEAD" };
+        break;
     }
 
     // Fallback when only a transcript is present (e.g. real STT with no label):

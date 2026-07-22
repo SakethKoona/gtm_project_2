@@ -5,18 +5,20 @@ import type { TelephonyProvider } from "@/lib/telephony/provider";
 import { HeuristicClassifier, type CallState } from "@/lib/classifier";
 import { chooseDigit, recordOutcome } from "@/lib/ivr/navigator";
 import { completePendingCallFollowUps } from "@/lib/pipeline/service";
-import { handoff } from "./handoff";
+import { startRepRing, confirmBridge, type RepRingHandle } from "./handoff";
 import { dialerBus } from "./events";
 
 /**
  * Per-call state machine (spec §3). Runs one outbound call end to end:
  *
- *   DIALING → on answer, classify each media moment →
+ *   DIALING → on ANSWER, pre-ring a rep into the conference (in parallel with
+ *             the classification below, so the rep is parked and waiting) →
+ *     classify each media moment →
  *     IVR_MENU  → navigator picks a digit, inject via DTMF (no audio)
  *     ON_HOLD   → stay silent, enforce max-hold timeout
- *     VOICEMAIL → hang up, mark disposition (no VM drop)
- *     HUMAN     → hand off immediately (§5)
- *     DEAD      → mark disposition, release
+ *     VOICEMAIL → release the parked rep, hang up (no VM drop)
+ *     HUMAN     → confirm the bridge — rep is already there, ~0 wait (§5)
+ *     DEAD      → release the parked rep, mark disposition
  *
  * The lead never hears synthesized audio — only DTMF and silence. Records a
  * full timeline + outcome to call_attempts for observability + abandonment.
@@ -95,7 +97,37 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
     timeline,
   };
 
+  // Pre-ring: started the instant the lead answers so a rep is parked in the
+  // conference by the time a human is confirmed. Lazily started (whichever of the
+  // "answered" event or a HUMAN classification lands first kicks it off).
+  let ringHandle: RepRingHandle | null = null;
+  const ensureRing = async (): Promise<RepRingHandle> => {
+    if (!ringHandle) {
+      ringHandle = await startRepRing({
+        provider,
+        callId: handle.callId,
+        campaignId: campaign.id,
+        leadId: lead.id,
+        ringTimeoutSeconds: campaign.repRingTimeoutSeconds,
+      });
+    }
+    return ringHandle;
+  };
+  // Release a parked rep when the call ends up not being a live human.
+  const releaseParkedRep = async () => {
+    if (ringHandle) await ringHandle.release();
+  };
+
   for await (const event of handle.events) {
+    // Lead answered: pre-ring a rep NOW, in parallel with the classification
+    // below. The rep joins the silent conference and waits — so a HUMAN result
+    // bridges instantly instead of making the customer wait through a fresh dial.
+    if (event.type === "answered") {
+      record("ANSWERED");
+      await ensureRing();
+      continue;
+    }
+
     const c = classifier.classify(event);
     if (!c) continue;
 
@@ -117,6 +149,7 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
         // Guard against infinite menu trees — bail out.
         outcome.finalState = "DEAD";
         outcome.disposition = "ivr_giveup";
+        await releaseParkedRep();
         await provider.hangup(handle.callId);
         break;
       }
@@ -137,6 +170,7 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
       if (holdMs + (Date.now() - holdStart) > campaign.maxHoldSeconds * 1000) {
         outcome.finalState = "DEAD";
         outcome.disposition = "hold_timeout";
+        await releaseParkedRep();
         await provider.hangup(handle.callId);
         break;
       }
@@ -147,6 +181,7 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
       record("VOICEMAIL");
       outcome.finalState = "VOICEMAIL";
       outcome.disposition = "voicemail";
+      await releaseParkedRep(); // free the parked rep — it wasn't a live human
       await provider.hangup(handle.callId); // no VM drop (out of scope)
       break;
     }
@@ -157,26 +192,32 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
       outcome.reachedHuman = true;
       outcome.timeToHumanMs = timeToHumanMs;
 
-      const result = await handoff({
-        provider,
-        callId: handle.callId,
-        campaignId: campaign.id,
-        leadId: lead.id,
-        ringTimeoutSeconds: campaign.repRingTimeoutSeconds,
-      });
+      // The rep was pre-rung at answer; wait on that (usually already parked).
+      // If AMD confirmed HUMAN before the "answered" event landed, start now.
+      const ring = await ensureRing();
+      const winner = await ring.winner;
 
-      if (result.outcome === "bridged") {
+      if (winner) {
+        const bridged = await confirmBridge({
+          provider,
+          callId: handle.callId,
+          campaignId: campaign.id,
+          leadId: lead.id,
+          repId: winner.repId,
+          lead: ring.lead,
+        });
         record("BRIDGED");
         outcome.finalState = "BRIDGED";
         outcome.bridged = true;
-        outcome.repId = result.repId;
-        outcome.attemptId = result.attemptId;
+        outcome.repId = bridged.repId;
+        outcome.attemptId = bridged.attemptId;
         outcome.disposition = "bridged_to_rep";
       } else {
         record("ABANDONED");
         outcome.finalState = "ABANDONED";
         outcome.abandoned = true;
         outcome.disposition = "abandoned_no_rep";
+        await releaseParkedRep();
         await provider.hangup(handle.callId);
       }
       break;
@@ -185,6 +226,7 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
     if (c.state === "DEAD") {
       record("DEAD");
       outcome.finalState = "DEAD";
+      await releaseParkedRep(); // lead hung up — don't strand a parked rep
       break;
     }
   }
