@@ -118,8 +118,20 @@ export function TrackerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (endCallOpen) return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      // Don't hijack keys while typing or when a focusable control is active
+      // (the console shortcuts run app-wide via the admin dock, so a stray
+      // Space/Enter must not steal button/link activation or form input).
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        tag === "BUTTON" ||
+        tag === "A" ||
+        el?.isContentEditable
+      )
+        return;
       if (e.repeat) return;
       const b = BUCKETS.find((x) => x.key === e.key);
       if (b) {
