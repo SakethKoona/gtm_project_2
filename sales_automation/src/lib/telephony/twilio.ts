@@ -132,24 +132,29 @@ export class TwilioTelephonyProvider implements TelephonyProvider {
       const whisperParam = whisper
         ? `&amp;whisper=${encodeURIComponent(whisper)}`
         : "";
-      // Ring every rep simultaneously; first "answered" callback wins.
-      for (const rep of repPhones) {
-        this.client.calls
-          .create({
-            to: rep.phone,
-            from: this.from,
-            url: `${this.publicUrl}/twiml/rep-join?conf=${encodeURIComponent(conf)}${whisperParam}`,
-            method: "POST",
-            statusCallback: `${this.publicUrl}/rep-status?leadCallSid=${session.callSid}&repId=${rep.repId}`,
-            statusCallbackEvent: ["answered", "completed"],
-            statusCallbackMethod: "POST",
-            timeout: Math.ceil(timeoutMs / 1000),
-          })
-          .then((repCall) =>
-            registerRepCall(session.callSid, repCall.sid, rep.repId),
-          )
-          .catch((e) => console.error("rep dial failed", rep.repId, e));
-      }
+      // Ring every rep simultaneously; first "answered" callback wins. Collect
+      // every leg's create+register into one Promise.all (instead of firing
+      // each unawaited) so registration failures aren't silently dropped and
+      // every callSid lands in repCallSids as soon as it's known.
+      Promise.all(
+        repPhones.map((rep) =>
+          this.client.calls
+            .create({
+              to: rep.phone,
+              from: this.from,
+              url: `${this.publicUrl}/twiml/rep-join?conf=${encodeURIComponent(conf)}${whisperParam}`,
+              method: "POST",
+              statusCallback: `${this.publicUrl}/rep-status?leadCallSid=${session.callSid}&repId=${rep.repId}`,
+              statusCallbackEvent: ["answered", "completed"],
+              statusCallbackMethod: "POST",
+              timeout: Math.ceil(timeoutMs / 1000),
+            })
+            .then((repCall) =>
+              registerRepCall(session.callSid, repCall.sid, rep.repId),
+            )
+            .catch((e) => console.error("rep dial failed", rep.repId, e)),
+        ),
+      );
 
       setTimeout(() => finish(null), timeoutMs);
     });

@@ -15,15 +15,16 @@ export function repClientIdentity(userId: string): string {
  * it. Browser reps are global (no campaignId) — any online one can take a call.
  */
 export async function ensureBrowserRep(userId: string, name: string) {
-  const existing = (
-    await db.select().from(reps).where(eq(reps.userId, userId))
-  )[0];
-  if (existing) return existing;
-  const [row] = await db
+  // Upsert instead of check-then-insert: two concurrent first-time calls for
+  // the same user (e.g. token mint + heartbeat right after login, or two open
+  // tabs) would otherwise both see no row and both insert.
+  const [inserted] = await db
     .insert(reps)
     .values({ name, kind: "browser", userId, presence: "away" })
+    .onConflictDoNothing({ target: reps.userId })
     .returning();
-  return row;
+  if (inserted) return inserted;
+  return (await db.select().from(reps).where(eq(reps.userId, userId)))[0];
 }
 
 /** Heartbeat a browser rep: online → available + fresh lastSeen, else away. */

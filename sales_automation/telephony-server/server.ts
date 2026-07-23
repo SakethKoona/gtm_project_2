@@ -83,9 +83,7 @@ app.all("/twiml/silence", async (_req, reply) =>
 // Rep leg: whisper (rep-ear only) THEN join the same conference to bridge.
 app.post("/twiml/rep-join", async (req, reply) => {
   const q = req.query as { conf?: string; whisper?: string };
-  const whisper = q.whisper
-    ? `<Say>${escapeXml(decodeURIComponent(q.whisper))}</Say>`
-    : "";
+  const whisper = q.whisper ? `<Say>${escapeXml(q.whisper)}</Say>` : "";
   return xml(
     reply,
     `<?xml version="1.0" encoding="UTF-8"?>

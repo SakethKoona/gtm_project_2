@@ -290,23 +290,29 @@ export const campaigns = pgTable("campaigns", {
 });
 
 /** reps — the people who get bridged to leads. presence feeds `freeReps`. */
-export const reps = pgTable("reps", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  // Phone reps only. Browser reps have no number (identity = rep_<userId>).
-  phone: text("phone"),
-  kind: repKindEnum("kind").notNull().default("phone"),
-  // Browser reps link to their user; presence follows login + heartbeat.
-  userId: uuid("user_id"),
-  lastSeen: timestamp("last_seen", { withTimezone: true }),
-  presence: repPresenceEnum("presence").notNull().default("away"),
-  // true while bridged to a lead — a busy rep is not "free" even if available.
-  onCall: boolean("on_call").notNull().default(false),
-  campaignId: uuid("campaign_id"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const reps = pgTable(
+  "reps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    // Phone reps only. Browser reps have no number (identity = rep_<userId>).
+    phone: text("phone"),
+    kind: repKindEnum("kind").notNull().default("phone"),
+    // Browser reps link to their user; presence follows login + heartbeat.
+    userId: uuid("user_id"),
+    lastSeen: timestamp("last_seen", { withTimezone: true }),
+    presence: repPresenceEnum("presence").notNull().default("away"),
+    // true while bridged to a lead — a busy rep is not "free" even if available.
+    onCall: boolean("on_call").notNull().default(false),
+    campaignId: uuid("campaign_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  // One rep row per user — NULLs (phone reps) are unaffected, Postgres never
+  // treats two NULLs as duplicates.
+  (t) => [uniqueIndex("reps_user_id_uniq").on(t.userId)],
+);
 
 /**
  * call_attempts — one row per outbound dial. Records the full state-machine
