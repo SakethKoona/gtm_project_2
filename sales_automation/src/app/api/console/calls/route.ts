@@ -8,7 +8,8 @@ import {
   completePendingCallFollowUps,
 } from "@/lib/pipeline/service";
 import { recordCalled } from "@/lib/pipeline/ledger";
-import { OUTCOME_TEMPLATES } from "@/lib/config";
+import { OUTCOME_TEMPLATES, resultLabelFor } from "@/lib/config";
+import { writeLeadResult } from "@/lib/sheets/writeback";
 
 export const dynamic = "force-dynamic";
 
@@ -189,6 +190,14 @@ export async function POST(request: Request) {
       callAttemptId: saved.id,
       followUp,
     });
+
+    // Closed loop: write the rep's result back to the lead's Google-Sheet row
+    // (no-op for non-sheet leads; best-effort). Skip when no disposition was
+    // chosen — the row stays "Queued" until the rep finalizes one.
+    const resultLabel = resultLabelFor(disp);
+    if (resultLabel) {
+      await writeLeadResult(leadId, resultLabel, note ?? "");
+    }
   }
 
   // Optional server-side Google Sheets append (auto-log). See SHEETS_SETUP.md.

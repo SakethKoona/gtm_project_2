@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SheetImportPanel } from "@/components/sheet-import-panel";
 
 type MappableField =
   | "phone"
@@ -177,10 +178,18 @@ export default function IngestPage() {
         <h1 className="font-display mt-1 text-2xl">Lead ingestion</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Upload a vendor list → map columns → review the honest callable count →
-          commit. No row is dial-eligible until you confirm.
+          commit. No row is dial-eligible until you confirm. Or use a live Google
+          Sheet as the source below.
         </p>
       </header>
 
+      <div className="rise mt-6" style={{ "--rise-delay": "120ms" } as React.CSSProperties}>
+        <SheetImportPanel />
+      </div>
+
+      <h2 className="mt-8 text-sm font-semibold text-muted-foreground">
+        Or upload a CSV / XLSX
+      </h2>
       <div className="rise" style={{ "--rise-delay": "160ms" } as React.CSSProperties}>
         <Steps step={step} />
       </div>

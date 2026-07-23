@@ -44,10 +44,22 @@ function pick(
   return v != null && String(v).trim() !== "" ? String(v).trim() : null;
 }
 
+/**
+ * Options for the shared gate.
+ *  - b2bMode: business-to-business dialing (e.g. the Google-Sheet source). Skips
+ *    the consent-basis quarantine by assigning the callable `b2b` basis instead
+ *    of classifying free text, so phone-valid business rows become eligible. All
+ *    other gates (phone required, DNC/suppression, dedupe) still run. Never infer
+ *    b2b from text — it is only set here, explicitly.
+ */
+export type ValidateOptions = { b2bMode?: boolean };
+
 export async function validateBatch(
   rawRows: Record<string, string>[],
   mapping: ColumnMapping,
+  opts?: ValidateOptions,
 ): Promise<ValidatedBatch> {
+  const b2bMode = opts?.b2bMode ?? false;
   // First pass: extract + normalize phone for every row.
   type Draft = Omit<RowResult, "status" | "reason" | "dncStatus"> & {
     phoneReason: string | null;
@@ -69,8 +81,11 @@ export async function validateBatch(
       company: pick(raw, mapping, "company"),
       timezone: derivedTz,
       source: pick(raw, mapping, "source"),
-      consentBasis: pick(raw, mapping, "consentBasis"),
-      consentBasisType: classifyConsent(pick(raw, mapping, "consentBasis")).type,
+      // B2B: stamp the callable `b2b` basis; otherwise classify the raw consent text.
+      consentBasis: b2bMode ? "B2B" : pick(raw, mapping, "consentBasis"),
+      consentBasisType: b2bMode
+        ? ("b2b" as const)
+        : classifyConsent(pick(raw, mapping, "consentBasis")).type,
       notes: pick(raw, mapping, "notes"),
     };
   });
@@ -201,8 +216,18 @@ export async function commitBatch(params: {
   uploadedBy?: string;
   mapping: ColumnMapping;
   validated: ValidatedBatch;
+  /**
+   * Google-Sheet provenance for the closed loop. When present, each inserted lead
+   * is stamped with the spreadsheet id + tab and its own absolute row number
+   * (`rowByIndex[rowResult.rowIndex]`) so result write-back can find its row.
+   */
+  sheet?: {
+    spreadsheetId: string;
+    tab: string;
+    rowByIndex: Record<number, number>;
+  };
 }): Promise<string> {
-  const { filename, uploadedBy = "dev", mapping, validated } = params;
+  const { filename, uploadedBy = "dev", mapping, validated, sheet } = params;
   const { rows, summary } = validated;
 
   return db.transaction(async (tx) => {
@@ -243,6 +268,10 @@ export async function commitBatch(params: {
             validationStatus: r.status,
             validationReason: r.reason,
             ingestionBatchId: batch.id,
+            notes: r.notes,
+            sourceSheetId: sheet?.spreadsheetId ?? null,
+            sourceSheetTab: sheet?.tab ?? null,
+            sourceSheetRow: sheet ? (sheet.rowByIndex[r.rowIndex] ?? null) : null,
             rawSourceRow: r.raw,
           })),
         )

@@ -236,3 +236,109 @@ export async function appendRows(
   // Every submitted row is now accounted for (either just written or a dup).
   return rows.map((r) => String(r.id));
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Central lead-sheet read/write (closed-loop ingestion + result write-back).
+// These are tab-parameterized (NOT the "Calls" log tab) and header-driven, so a
+// human reordering columns doesn't corrupt reads or writes.
+// ───────────────────────────────────────────────────────────────────────────
+
+export type SheetLeadRow = {
+  /** 1-based absolute row number in the tab (row 1 = header). */
+  sheetRow: number;
+  /** Header-keyed, trimmed cell values (original header casing). */
+  values: Record<string, string>;
+};
+
+export type SheetReadResult = {
+  headers: string[];
+  /** lowercased+trimmed header → 0-based column index. */
+  headerIndex: Record<string, number>;
+  rows: SheetLeadRow[];
+};
+
+/** Title of the first tab in a spreadsheet (default target when none specified). */
+export async function firstSheetTitle(sheetUrl: string): Promise<string> {
+  const id = extractSpreadsheetId(sheetUrl);
+  const token = await getAccessToken();
+  const meta = (await api(token, `/${id}?fields=sheets.properties.title`)) as {
+    sheets?: { properties?: { title?: string } }[];
+  };
+  return meta.sheets?.[0]?.properties?.title ?? "Sheet1";
+}
+
+/** 0-based column index → A1 letter(s): 0→A, 25→Z, 26→AA. */
+function a1Col(index0: number): string {
+  let n = index0;
+  let s = "";
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
+/** A tab-qualified A1 range with the sheet name single-quoted (space/·-safe). */
+function a1Range(tab: string, range: string): string {
+  return `'${tab.replace(/'/g, "''")}'!${range}`;
+}
+
+/**
+ * Read a lead tab as rows carrying their absolute sheet row number + header-keyed
+ * values. Reads A1:Z (header row establishes the header→column map even if columns
+ * were reordered). Blank rows are skipped WITHOUT renumbering — the absolute row
+ * number is what write-back targets.
+ */
+export async function readLeadRows(
+  sheetUrl: string,
+  tab: string,
+): Promise<SheetReadResult> {
+  const id = extractSpreadsheetId(sheetUrl);
+  const token = await getAccessToken();
+  const r = (await api(
+    token,
+    `/${id}/values/${encodeURIComponent(a1Range(tab, "A1:Z"))}`,
+  )) as { values?: string[][] };
+
+  const grid = r.values ?? [];
+  const headers = (grid[0] ?? []).map((h) => (h ?? "").trim());
+  const headerIndex: Record<string, number> = {};
+  headers.forEach((h, i) => {
+    if (h) headerIndex[h.toLowerCase()] = i;
+  });
+
+  const rows: SheetLeadRow[] = [];
+  for (let i = 1; i < grid.length; i++) {
+    const cells = grid[i] ?? [];
+    if (cells.every((c) => (c ?? "").trim() === "")) continue; // skip blank, keep numbering
+    const values: Record<string, string> = {};
+    headers.forEach((h, ci) => {
+      if (h) values[h] = (cells[ci] ?? "").trim();
+    });
+    rows.push({ sheetRow: i + 1, values });
+  }
+  return { headers, headerIndex, rows };
+}
+
+/**
+ * Write individual cells (RAW) in one batch call. Used both to stamp many rows'
+ * Result → "Queued" on import and to write a single row's Result + Notes on
+ * call completion. Only the named cells are touched — never a whole row.
+ */
+export async function writeCells(
+  sheetUrl: string,
+  tab: string,
+  cells: { sheetRow: number; col0: number; value: string }[],
+): Promise<void> {
+  if (cells.length === 0) return;
+  const id = extractSpreadsheetId(sheetUrl);
+  const token = await getAccessToken();
+  const data = cells.map((c) => ({
+    range: a1Range(tab, `${a1Col(c.col0)}${c.sheetRow}`),
+    values: [[c.value]],
+  }));
+  await api(token, `/${id}/values:batchUpdate`, {
+    method: "POST",
+    body: { valueInputOption: "RAW", data },
+  });
+}

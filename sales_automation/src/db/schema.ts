@@ -51,6 +51,10 @@ export const consentBasisTypeEnum = pgEnum("consent_basis_type", [
   "existing_business_relationship",
   "inbound_inquiry",
   "unrecognized",
+  // Business-to-business dialing basis. Assigned explicitly by the Google-Sheet
+  // ingestion path (never inferred from free text); treated as callable so B2B
+  // sheet leads pass the consent gate at ingest and at dial time.
+  "b2b",
 ]);
 
 /** Per-call state emitted by the classifier (Phase 3/4). */
@@ -169,6 +173,15 @@ export const leads = pgTable(
     ingestionBatchId: uuid("ingestion_batch_id").references(
       () => ingestionBatches.id,
     ),
+    // First-class free-text notes (from the sheet's Notes column). Previously
+    // notes only survived inside rawSourceRow jsonb.
+    notes: text("notes"),
+    // Closed-loop Google-Sheet write-back coordinates. Null sourceSheetId ⇒ the
+    // lead did not come from a sheet, so result write-back is a no-op. sourceSheetRow
+    // is a hint that write-back re-verifies by phone before trusting.
+    sourceSheetId: text("source_sheet_id"),
+    sourceSheetTab: text("source_sheet_tab"),
+    sourceSheetRow: integer("source_sheet_row"),
     rawSourceRow: jsonb("raw_source_row").$type<Record<string, string>>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -456,3 +469,16 @@ export const contactLedger = pgTable(
   },
   (t) => [uniqueIndex("contact_ledger_phone_uniq").on(t.phone)],
 );
+
+/**
+ * app_settings — tiny server-side key/value store for singleton config that the
+ * admin sets in the UI (rather than env / redeploy). First use: the central lead
+ * Google Sheet URL + poller settings for the closed-loop ingester.
+ */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

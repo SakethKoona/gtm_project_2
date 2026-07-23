@@ -7,6 +7,8 @@ import { chooseDigit, recordOutcome } from "@/lib/ivr/navigator";
 import { completePendingCallFollowUps } from "@/lib/pipeline/service";
 import { startRepRing, confirmBridge, type RepRingHandle } from "./handoff";
 import { dialerBus } from "./events";
+import { writeLeadResult } from "@/lib/sheets/writeback";
+import { resultLabelFor } from "@/lib/config";
 
 /**
  * Per-call state machine (spec §3). Runs one outbound call end to end:
@@ -294,6 +296,18 @@ export async function runCall(params: RunParams): Promise<CallOutcome> {
     // + due and re-authorizes the dial on every subsequent run. Mirrors the
     // console's finalize spend for bridged calls (console/calls/route.ts).
     await completePendingCallFollowUps(lead.id);
+
+    // Closed loop: write this machine outcome back to the lead's Google-Sheet row
+    // (no-op for non-sheet leads; best-effort — never throws). Bridged calls are
+    // written from the console instead, once the rep picks a disposition.
+    const resultLabel = resultLabelFor(outcome.disposition);
+    if (resultLabel) {
+      await writeLeadResult(
+        lead.id,
+        resultLabel,
+        systemActivityBody(outcome.disposition),
+      );
+    }
   }
 
   return outcome;

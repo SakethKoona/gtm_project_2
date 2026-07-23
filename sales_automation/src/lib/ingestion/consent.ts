@@ -16,7 +16,10 @@ export type ConsentBasisType =
   | "express_oral"
   | "existing_business_relationship"
   | "inbound_inquiry"
-  | "unrecognized";
+  | "unrecognized"
+  // Business-to-business basis. Assigned explicitly by the B2B (Google-Sheet)
+  // ingestion path — never inferred from free text (no PATTERNS entry below).
+  | "b2b";
 
 /** Which classified bases are treated as a valid basis to call. */
 const CALLABLE_BASES = new Set<ConsentBasisType>([
@@ -24,6 +27,7 @@ const CALLABLE_BASES = new Set<ConsentBasisType>([
   "express_oral",
   "existing_business_relationship",
   "inbound_inquiry",
+  "b2b",
 ]);
 
 const PATTERNS: { type: ConsentBasisType; match: RegExp }[] = [

@@ -38,6 +38,38 @@ export function dispositionLabel(id: string | null): string {
 }
 
 /**
+ * RESULT_LABELS — friendly labels written back into the central Google Sheet's
+ * `Result` column. Covers BOTH vocabularies: the orchestrator's machine
+ * dispositions (non-bridged outcomes) and the rep-selected DISPOSITIONS ids
+ * (bridged, finalized in the console). `Queued` is the sentinel the ingester
+ * writes on import. `bridged_to_rep` is intentionally absent — the console owns
+ * a bridged call's real result. A disposition with no mapping (or null) is left
+ * as "Queued" by the caller.
+ */
+export const SHEET_RESULT_QUEUED = "Queued";
+export const RESULT_LABELS: Record<string, string> = {
+  // Machine (orchestrator CallOutcome.disposition)
+  no_answer: "No answer",
+  voicemail: "Left voicemail",
+  ivr_giveup: "Couldn't reach (phone menu)",
+  hold_timeout: "Couldn't reach (long hold)",
+  abandoned_no_rep: "No rep available",
+  // Rep-selected (config DISPOSITIONS ids)
+  booked: "Booked meeting",
+  callback: "Callback scheduled",
+  not_interested: "Not interested",
+  wrong_number: "Wrong number",
+  no_contact: "No contact made",
+  other: "Contacted",
+};
+
+/** Map an internal disposition to its sheet Result label, or null if unmapped. */
+export function resultLabelFor(disposition: string | null): string | null {
+  if (!disposition) return null;
+  return RESULT_LABELS[disposition] ?? null;
+}
+
+/**
  * OUTCOME_TEMPLATES — prefilled one-click call-outcome documentation (spec §3).
  * Each template pre-fills the composer body, advances the lead's pipeline stage,
  * and may suggest a follow-up channel. `do_not_call` additionally routes through

@@ -1,4 +1,7 @@
 import { config } from "dotenv";
+// Load .env.local first (Google Sheets service-account creds live there, like the
+// Next app), then .env (DB + Twilio). dotenv never overrides already-set vars.
+config({ path: ".env.local" });
 config();
 
 import Fastify from "fastify";
@@ -14,6 +17,8 @@ import {
 import { runCampaignDialer } from "../src/lib/dialer/engine";
 import { HeuristicClassifier } from "../src/lib/classifier";
 import { getSTT } from "../src/lib/classifier/stt";
+import { importSheetLeads } from "../src/lib/ingestion/sheet-source";
+import { getLeadSheetConfig } from "../src/lib/settings";
 
 /**
  * Always-on telephony service (the "separate service" from the plan).
@@ -212,6 +217,26 @@ app.get("/media", { websocket: true }, (socket) => {
   socket.on("close", () => stt?.close());
 });
 
+// One dialer run per campaign at a time. The run drains all currently-dialable
+// leads (re-querying mid-run) and exits during a lull; the sheet poller restarts
+// it when new leads arrive.
+const activeDialers = new Set<string>();
+function ensureDialer(campaignId: string): boolean {
+  if (activeDialers.has(campaignId)) return false;
+  if (!isTelephonyConfigured()) return false;
+  const { provider } = getTelephonyProvider();
+  activeDialers.add(campaignId);
+  void runCampaignDialer({
+    provider,
+    campaignId,
+    fromNumber: process.env.TWILIO_NUMBER!,
+    talkTimeMs: 1500,
+  })
+    .catch((e) => app.log.error(e))
+    .finally(() => activeDialers.delete(campaignId));
+  return true;
+}
+
 // ── Trigger real dialing for a campaign via Twilio.
 app.post("/dial/campaign", async (req, reply) => {
   const b = req.body as { campaignId?: string };
@@ -221,15 +246,37 @@ app.post("/dial/campaign", async (req, reply) => {
       error: `Telephony not configured. Missing: ${telephonyMissing().join(", ")}.`,
     });
   }
-  const { provider, mode } = getTelephonyProvider();
-  void runCampaignDialer({
-    provider,
-    campaignId: b.campaignId,
-    fromNumber: process.env.TWILIO_NUMBER!,
-    talkTimeMs: 1500,
-  }).catch((e) => app.log.error(e));
-  return reply.send({ started: true, mode });
+  const { mode } = getTelephonyProvider();
+  const started = ensureDialer(b.campaignId);
+  return reply.send({ started, alreadyRunning: !started, mode });
 });
+
+// ── Real-time central-Sheet poller: import new "none" rows and keep the dialer
+// draining them. Runs on an interval; skips overlapping passes.
+const SHEET_POLL_MS = Number(process.env.LEAD_SHEET_POLL_MS ?? 25000);
+let sheetPollInFlight = false;
+async function pollLeadSheet(): Promise<void> {
+  if (sheetPollInFlight) return;
+  sheetPollInFlight = true;
+  try {
+    const cfg = await getLeadSheetConfig();
+    if (!cfg.pollEnabled || !cfg.sheetUrl) return;
+    const res = await importSheetLeads({
+      sheetUrl: cfg.sheetUrl,
+      tab: cfg.tab ?? undefined,
+      campaignId: cfg.campaignId ?? undefined,
+      uploadedBy: "sheet-poller",
+    });
+    if (res.imported > 0) {
+      app.log.info(`[sheet-poll] imported ${res.imported} new lead(s) from "${res.tab}"`);
+    }
+    if (cfg.campaignId) ensureDialer(cfg.campaignId);
+  } catch (e) {
+    app.log.error({ err: e }, "[sheet-poll] pass failed");
+  } finally {
+    sheetPollInFlight = false;
+  }
+}
 
   app.get("/health", async () => ({
     ok: true,
@@ -257,6 +304,11 @@ app.post("/dial/campaign", async (req, reply) => {
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
   app.log.info(`telephony server on :${PORT}`);
+
+  // Start the real-time central-Sheet poller (no-op until an admin enables it +
+  // sets a sheet URL in the console).
+  setInterval(() => void pollLeadSheet(), SHEET_POLL_MS);
+  app.log.info(`📄 lead-sheet poller every ${Math.round(SHEET_POLL_MS / 1000)}s`);
 }
 
 function telephonyMissing(): string[] {

@@ -43,17 +43,29 @@ export async function runCampaignDialer(params: {
   const campaign = await getCampaign(campaignId);
   if (!campaign) throw new Error(`campaign ${campaignId} not found`);
 
-  const leads = (await listCampaignLeads(campaignId)).slice(
-    0,
-    params.maxLeads ?? 100000,
-  );
+  // Real-time queue: pull eligible campaign leads not already queued this run.
+  // Called at start and whenever the in-memory queue drains, so leads the sheet
+  // ingester adds mid-run are dialed in the same run without a restart. Re-dialing
+  // is prevented by checkDialable + the contact ledger (the dedupe authority), so
+  // re-querying already-seen ids is safe — we just skip them via `seen`.
+  const maxDials = params.maxLeads ?? Infinity;
+  const seen = new Set<string>();
+  const queue: Awaited<ReturnType<typeof listCampaignLeads>> = [];
+  const refill = async () => {
+    for (const l of await listCampaignLeads(campaignId)) {
+      if (!seen.has(l.id)) {
+        seen.add(l.id);
+        queue.push(l);
+      }
+    }
+  };
+  await refill();
 
   let ratio = parseFloat(campaign.overdialRatio) || 1.0;
   const governor = new InMemoryGovernor(ratio);
   const outcomes: CallOutcome[] = [];
   let released = 0;
   let blockedByGate = 0;
-  let leadIdx = 0;
   const inFlight = new Map<number, Promise<void>>();
   let seq = 0;
 
@@ -67,11 +79,11 @@ export async function runCampaignDialer(params: {
   dialerBus.publish({
     type: "batch_started",
     campaignId,
-    queued: leads.length,
+    queued: queue.length,
     at: new Date().toISOString(),
   });
 
-  while (leadIdx < leads.length || inFlight.size > 0) {
+  while (queue.length > 0 || inFlight.size > 0) {
     // Refresh governor inputs each cycle.
     const free = (await listFreeReps(campaignId)).length;
     governor.setFreeReps(free);
@@ -92,8 +104,8 @@ export async function runCampaignDialer(params: {
 
     let slots = governor.releasableSlots();
 
-    while (slots > 0 && leadIdx < leads.length) {
-      const lead = leads[leadIdx++];
+    while (slots > 0 && queue.length > 0 && released < maxDials) {
+      const lead = queue.shift()!;
       if (!lead.phone) continue;
 
       const decision = await checkDialable(lead, campaign);
@@ -134,8 +146,12 @@ export async function runCampaignDialer(params: {
       inFlight.set(key, p);
     }
 
+    // Drained the in-memory queue — try to pick up leads added since (e.g. by the
+    // sheet poller mid-run) before idling or exiting the run.
+    if (queue.length === 0 && released < maxDials) await refill();
+
     // Backpressure: reps saturated and nothing to react to → brief wait.
-    if (inFlight.size === 0 && governor.releasableSlots() <= 0 && leadIdx < leads.length) {
+    if (inFlight.size === 0 && governor.releasableSlots() <= 0 && queue.length > 0) {
       await sleep(20);
       continue;
     }
