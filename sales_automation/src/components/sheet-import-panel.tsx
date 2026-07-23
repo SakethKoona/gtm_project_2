@@ -176,8 +176,9 @@ export function SheetImportPanel() {
             onChange={(e) => setPollEnabled(e.target.checked)}
           />
           <span>
-            Real-time: keep importing new rows &amp; dialing automatically
-            (background poller)
+            Keep importing new rows automatically (the <code>npm run ingest</code>{" "}
+            worker reads the sheet on a loop). Dialing stays separate — start it
+            from the dashboard when you want to call.
           </span>
         </label>
       </div>

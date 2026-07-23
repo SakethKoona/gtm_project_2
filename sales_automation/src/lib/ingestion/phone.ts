@@ -1,5 +1,11 @@
-import { parsePhoneNumberFromString } from "libphonenumber-js";
-import type { CountryCode } from "libphonenumber-js";
+// Use the /core API with metadata passed explicitly. The default
+// `libphonenumber-js` entry bundles metadata via a wrapper that esbuild/tsx can
+// resolve to `undefined` (the standalone telephony + ingest workers run under
+// tsx), crashing with "Cannot read properties of undefined (reading
+// 'hasOwnProperty')". Passing metadata directly works in every runtime.
+import { parsePhoneNumberFromString } from "libphonenumber-js/core";
+import type { CountryCode } from "libphonenumber-js/core";
+import metadata from "libphonenumber-js/min/metadata";
 
 export type PhoneParse =
   | { ok: true; e164: string; nationalNumber: string; countryAreaCode: string }
@@ -17,7 +23,7 @@ export function normalizePhone(
   const trimmed = (raw ?? "").trim();
   if (!trimmed) return { ok: false, reason: "empty phone" };
 
-  const parsed = parsePhoneNumberFromString(trimmed, { defaultCountry });
+  const parsed = parsePhoneNumberFromString(trimmed, { defaultCountry }, metadata);
   if (!parsed) return { ok: false, reason: "unparseable phone" };
   if (!parsed.isValid()) return { ok: false, reason: "invalid phone number" };
 

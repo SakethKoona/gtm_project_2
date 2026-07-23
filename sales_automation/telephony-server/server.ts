@@ -17,8 +17,6 @@ import {
 import { runCampaignDialer } from "../src/lib/dialer/engine";
 import { HeuristicClassifier } from "../src/lib/classifier";
 import { getSTT } from "../src/lib/classifier/stt";
-import { importSheetLeads } from "../src/lib/ingestion/sheet-source";
-import { getLeadSheetConfig } from "../src/lib/settings";
 
 /**
  * Always-on telephony service (the "separate service" from the plan).
@@ -251,33 +249,6 @@ app.post("/dial/campaign", async (req, reply) => {
   return reply.send({ started, alreadyRunning: !started, mode });
 });
 
-// ── Real-time central-Sheet poller: import new "none" rows and keep the dialer
-// draining them. Runs on an interval; skips overlapping passes.
-const SHEET_POLL_MS = Number(process.env.LEAD_SHEET_POLL_MS ?? 25000);
-let sheetPollInFlight = false;
-async function pollLeadSheet(): Promise<void> {
-  if (sheetPollInFlight) return;
-  sheetPollInFlight = true;
-  try {
-    const cfg = await getLeadSheetConfig();
-    if (!cfg.pollEnabled || !cfg.sheetUrl) return;
-    const res = await importSheetLeads({
-      sheetUrl: cfg.sheetUrl,
-      tab: cfg.tab ?? undefined,
-      campaignId: cfg.campaignId ?? undefined,
-      uploadedBy: "sheet-poller",
-    });
-    if (res.imported > 0) {
-      app.log.info(`[sheet-poll] imported ${res.imported} new lead(s) from "${res.tab}"`);
-    }
-    if (cfg.campaignId) ensureDialer(cfg.campaignId);
-  } catch (e) {
-    app.log.error({ err: e }, "[sheet-poll] pass failed");
-  } finally {
-    sheetPollInFlight = false;
-  }
-}
-
   app.get("/health", async () => ({
     ok: true,
     configured: isTelephonyConfigured(),
@@ -304,11 +275,10 @@ async function pollLeadSheet(): Promise<void> {
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
   app.log.info(`telephony server on :${PORT}`);
-
-  // Start the real-time central-Sheet poller (no-op until an admin enables it +
-  // sets a sheet URL in the console).
-  setInterval(() => void pollLeadSheet(), SHEET_POLL_MS);
-  app.log.info(`📄 lead-sheet poller every ${Math.round(SHEET_POLL_MS / 1000)}s`);
+  app.log.info(
+    `ℹ️  Dialing is on-demand (hit "Dial" in the dashboard). Sheet ingestion is a ` +
+      `separate service — run \`npm run ingest\`.`,
+  );
 }
 
 function telephonyMissing(): string[] {
