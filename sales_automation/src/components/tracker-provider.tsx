@@ -60,17 +60,38 @@ export function TrackerProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRepIdState(localStorage.getItem(REP_KEY));
-    reloadReps();
-  }, [reloadReps]);
-
   const setRepId = useCallback((id: string | null) => {
     if (id) localStorage.setItem(REP_KEY, id);
     else localStorage.removeItem(REP_KEY);
     setRepIdState(id);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const saved = localStorage.getItem(REP_KEY);
+    if (saved) {
+      // Honor a prior explicit choice (a specific rep, or solo mode).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRepIdState(saved);
+      reloadReps();
+    } else {
+      // No prior choice → auto-select the logged-in user's OWN softphone rep so
+      // it activates on login without picking from a list. (Solo stays an explicit
+      // opt-in via the picker.)
+      (async () => {
+        try {
+          const me = await fetch("/api/telephony/me").then((x) => x.json());
+          if (active && me.repId) setRepId(me.repId);
+        } catch {
+          /* fall back to the picker */
+        }
+        reloadReps();
+      })();
+    }
+    return () => {
+      active = false;
+    };
+  }, [reloadReps, setRepId]);
 
   // Subscribe to this rep's campaign event stream: auto-start on a bridged call.
   const startIncomingRef = useRef(t.startIncoming);
