@@ -5,11 +5,15 @@ import { BUCKETS } from "@/lib/config";
 import { fmtMs } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** Six compact state toggles. One active at a time; click or press its number. */
-export function BucketGrid() {
+/**
+ * Six state toggles (dialing/ringing, waiting, right/wrong person, voicemail, no
+ * answer). One active at a time; click or press its number. `compact` is the tight
+ * variant used in the floating dock.
+ */
+export function BucketGrid({ compact = false }: { compact?: boolean }) {
   const t = useTracker();
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className={cn("grid grid-cols-2 gap-2", !compact && "sm:grid-cols-3", compact && "gap-1.5")}>
       {BUCKETS.map((b) => {
         const active = t.active === b.id;
         return (
@@ -27,18 +31,29 @@ export function BucketGrid() {
                 : undefined
             }
             className={cn(
-              "flex flex-col gap-1 rounded-lg border border-border bg-card px-3 py-2.5 text-left outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
+              "flex flex-col rounded-lg border border-border bg-card text-left outline-none transition-[transform,color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 active:scale-[0.98]",
+              compact ? "gap-0.5 px-2 py-1.5" : "gap-1 px-3 py-2.5",
               !active && "hover:bg-muted",
             )}
           >
-            <span className="flex items-center gap-2">
+            <span className={cn("flex items-center", compact ? "gap-1.5" : "gap-2")}>
               <kbd
                 style={active ? { color: b.color, borderColor: b.color } : undefined}
-                className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground"
+                className={cn(
+                  "rounded border border-border bg-muted font-mono leading-none text-muted-foreground",
+                  compact ? "px-1 py-0.5 text-[10px]" : "px-1.5 py-0.5 text-[11px]",
+                )}
               >
                 {b.key}
               </kbd>
-              <span className="text-sm font-semibold text-foreground">{b.short}</span>
+              <span
+                className={cn(
+                  "font-semibold text-foreground",
+                  compact ? "text-xs" : "text-sm",
+                )}
+              >
+                {b.short}
+              </span>
               {active && (
                 <span
                   className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
@@ -48,7 +63,10 @@ export function BucketGrid() {
             </span>
             <span
               style={active ? { color: b.color } : undefined}
-              className="font-mono text-sm tabular-nums text-muted-foreground"
+              className={cn(
+                "font-mono tabular-nums text-muted-foreground",
+                compact ? "text-[10px]" : "text-sm",
+              )}
             >
               {fmtMs(t.bucketMs(b.id))}
             </span>

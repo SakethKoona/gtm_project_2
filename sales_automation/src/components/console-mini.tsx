@@ -5,6 +5,7 @@ import { PhoneOff, UserRound, ExternalLink, Phone } from "lucide-react";
 import { useTracker } from "@/components/tracker-provider";
 import { RepPicker } from "@/components/rep-picker";
 import { Softphone } from "@/components/softphone";
+import { BucketGrid } from "@/components/bucket-grid";
 import { Button } from "@/components/ui/button";
 import { fmtMs } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -109,17 +110,22 @@ export function ConsoleMini() {
         ))}
 
       {/* Timer */}
-      <div className="mt-8 text-center">
+      <div className="mt-6 text-center">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          {onCall ? "On call" : "Idle"}
+          {t.hint ?? (onCall ? "On call" : "Idle — press 1–6 to start")}
         </div>
-        <div className="mt-1 font-mono text-6xl font-bold leading-none tabular-nums">
+        <div className="mt-1 font-mono text-5xl font-bold leading-none tabular-nums">
           {fmtMs(t.elapsedMs)}
         </div>
       </div>
 
+      {/* Compact state toggles (dialing/ringing, right/wrong person, …) */}
+      <div className="mt-4">
+        <BucketGrid compact />
+      </div>
+
       {/* End call & save */}
-      <div className="mt-8">
+      <div className="mt-4">
         <Button className="h-12 w-full gap-2 text-base" onClick={t.openEndCall}>
           <PhoneOff className="h-5 w-5" /> End call &amp; save
           <span className="ml-1 text-xs opacity-70">(Enter)</span>
