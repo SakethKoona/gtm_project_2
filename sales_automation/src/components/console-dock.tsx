@@ -4,7 +4,8 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Headphones, X } from "lucide-react";
 import { TrackerProvider, useTracker } from "@/components/tracker-provider";
-import { ConsoleView } from "@/components/console-view";
+import { ConsoleMini } from "@/components/console-mini";
+import { DispositionDialog } from "@/components/disposition-dialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,7 +24,23 @@ export function ConsoleDock() {
   return (
     <TrackerProvider>
       <DockInner />
+      <DispositionHost />
     </TrackerProvider>
+  );
+}
+
+/** Hosts the end-call disposition modal (the /console layout has its own). */
+function DispositionHost() {
+  const t = useTracker();
+  return (
+    <DispositionDialog
+      open={t.endCallOpen}
+      onOpenChange={t.setEndCallOpen}
+      onSave={(d, note) => {
+        t.commitCall(d, note);
+        t.setEndCallOpen(false);
+      }}
+    />
   );
 }
 
@@ -68,7 +85,7 @@ function DockInner() {
           off-screen when closed) */}
       <aside
         className={cn(
-          "fixed right-0 top-0 z-50 flex h-full w-full max-w-[460px] flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200",
+          "fixed right-0 top-0 z-50 flex h-full w-full max-w-[360px] flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200",
           open ? "translate-x-0" : "pointer-events-none translate-x-full",
         )}
         aria-hidden={!open}
@@ -86,7 +103,7 @@ function DockInner() {
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
-          <ConsoleView />
+          <ConsoleMini />
         </div>
       </aside>
     </>
