@@ -482,3 +482,21 @@ export const appSettings = pgTable("app_settings", {
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * service_status — liveness + desired on/off for the standalone worker processes
+ * (ingest, telephony), surfaced in the admin "Services" panel.
+ *  - `heartbeatAt`: each worker upserts this every loop; the UI shows "alive" when
+ *    it's fresh (within the alive window).
+ *  - `enabled`: desired state the worker obeys — on = doing work, off = idling.
+ *    The process keeps running either way; the toggle pauses/resumes the job.
+ */
+export const serviceStatus = pgTable("service_status", {
+  service: text("service").primaryKey(), // "ingest" | "telephony"
+  enabled: boolean("enabled").notNull().default(true),
+  heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+  detail: jsonb("detail").$type<Record<string, unknown>>(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

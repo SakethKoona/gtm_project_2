@@ -17,6 +17,7 @@ import {
 import { runCampaignDialer } from "../src/lib/dialer/engine";
 import { HeuristicClassifier } from "../src/lib/classifier";
 import { getSTT } from "../src/lib/classifier/stt";
+import { heartbeat, isServiceEnabled } from "../src/lib/services";
 
 /**
  * Always-on telephony service (the "separate service" from the plan).
@@ -244,6 +245,11 @@ app.post("/dial/campaign", async (req, reply) => {
       error: `Telephony not configured. Missing: ${telephonyMissing().join(", ")}.`,
     });
   }
+  if (!(await isServiceEnabled("telephony"))) {
+    return reply.code(409).send({
+      error: "Dialing is paused. Turn the Telephony service on in the Services panel.",
+    });
+  }
   const { mode } = getTelephonyProvider();
   const started = ensureDialer(b.campaignId);
   return reply.send({ started, alreadyRunning: !started, mode });
@@ -279,6 +285,15 @@ app.post("/dial/campaign", async (req, reply) => {
     `ℹ️  Dialing is on-demand (hit "Dial" in the dashboard). Sheet ingestion is a ` +
       `separate service — run \`npm run ingest\`.`,
   );
+
+  // Heartbeat so the admin Services panel shows this process as alive.
+  const beat = () =>
+    void heartbeat("telephony", {
+      configured: isTelephonyConfigured(),
+      activeDialers: activeDialers.size,
+    }).catch((e) => app.log.error(e));
+  beat();
+  setInterval(beat, 20000);
 }
 
 function telephonyMissing(): string[] {

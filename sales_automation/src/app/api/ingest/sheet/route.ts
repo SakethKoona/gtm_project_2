@@ -29,7 +29,6 @@ const bodySchema = z.object({
   sheetUrl: z.string().min(1).optional(),
   tab: z.string().optional(),
   campaignId: z.string().uuid().optional(),
-  pollEnabled: z.boolean().optional(),
   // When false, only save config (no import). Defaults to running an import.
   runImport: z.boolean().optional(),
 });
@@ -51,8 +50,6 @@ export async function POST(request: Request) {
     await setSetting(SETTINGS_KEYS.leadSheetTab, b.tab.trim() || null);
   if (b.campaignId !== undefined)
     await setSetting(SETTINGS_KEYS.leadSheetCampaignId, b.campaignId || null);
-  if (b.pollEnabled !== undefined)
-    await setSetting(SETTINGS_KEYS.leadSheetPollEnabled, b.pollEnabled ? "true" : "false");
 
   const cfg = await getLeadSheetConfig();
   if (b.runImport === false) {

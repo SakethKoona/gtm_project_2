@@ -12,7 +12,6 @@ export const SETTINGS_KEYS = {
   leadSheetUrl: "lead_sheet_url",
   leadSheetTab: "lead_sheet_tab",
   leadSheetCampaignId: "lead_sheet_campaign_id",
-  leadSheetPollEnabled: "lead_sheet_poll_enabled",
 } as const;
 
 export async function getSetting(key: string): Promise<string | null> {
@@ -37,20 +36,13 @@ export type LeadSheetConfig = {
   sheetUrl: string | null;
   tab: string | null;
   campaignId: string | null;
-  pollEnabled: boolean;
 };
 
 export async function getLeadSheetConfig(): Promise<LeadSheetConfig> {
-  const [sheetUrl, tab, campaignId, poll] = await Promise.all([
+  const [sheetUrl, tab, campaignId] = await Promise.all([
     getSetting(SETTINGS_KEYS.leadSheetUrl),
     getSetting(SETTINGS_KEYS.leadSheetTab),
     getSetting(SETTINGS_KEYS.leadSheetCampaignId),
-    getSetting(SETTINGS_KEYS.leadSheetPollEnabled),
   ]);
-  return {
-    sheetUrl,
-    tab,
-    campaignId,
-    pollEnabled: poll === "true",
-  };
+  return { sheetUrl, tab, campaignId };
 }

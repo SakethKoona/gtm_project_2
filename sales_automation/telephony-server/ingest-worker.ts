@@ -6,6 +6,7 @@ config();
 
 import { getLeadSheetConfig } from "../src/lib/settings";
 import { importSheetLeads } from "../src/lib/ingestion/sheet-source";
+import { heartbeat, isServiceEnabled } from "../src/lib/services";
 
 /**
  * Lead-sheet ingestion worker — a standalone always-on service, separate from the
@@ -27,12 +28,23 @@ import { importSheetLeads } from "../src/lib/ingestion/sheet-source";
 const POLL_MS = Number(process.env.LEAD_SHEET_POLL_MS ?? 25000);
 
 let inFlight = false; // skip overlapping passes if a read runs long
+let totalImported = 0;
 async function tick(): Promise<void> {
   if (inFlight) return;
   inFlight = true;
   try {
+    const enabled = await isServiceEnabled("ingest");
     const cfg = await getLeadSheetConfig();
-    if (!cfg.pollEnabled || !cfg.sheetUrl) return; // idle until enabled in the panel
+    // Heartbeat every tick (even when paused/idle) so the Services panel shows the
+    // process is alive; `enabled` drives whether we actually import.
+    await heartbeat("ingest", {
+      enabled,
+      configured: !!cfg.sheetUrl,
+      totalImported,
+    });
+    if (!enabled) return; // paused from the Services panel
+    if (!cfg.sheetUrl) return; // no sheet configured yet
+
     const res = await importSheetLeads({
       sheetUrl: cfg.sheetUrl,
       tab: cfg.tab ?? undefined,
@@ -40,10 +52,18 @@ async function tick(): Promise<void> {
       uploadedBy: "ingest-worker",
     });
     if (res.imported > 0) {
+      totalImported += res.imported;
       console.log(
         `[ingest] ${new Date().toISOString()} — imported ${res.imported} new lead(s) from "${res.tab}" ` +
           `(${res.summary.duplicates} dup, ${res.summary.invalid} invalid)`,
       );
+      await heartbeat("ingest", {
+        enabled,
+        configured: true,
+        totalImported,
+        lastImport: res.imported,
+        lastImportAt: new Date().toISOString(),
+      });
     }
   } catch (e) {
     console.error("[ingest] pass failed:", (e as Error)?.stack ?? e);

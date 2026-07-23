@@ -17,7 +17,6 @@ type Config = {
   sheetUrl: string | null;
   tab: string | null;
   campaignId: string | null;
-  pollEnabled: boolean;
   serviceAccountEmail: string | null;
 };
 
@@ -33,7 +32,6 @@ export function SheetImportPanel() {
   const [sheetUrl, setSheetUrl] = useState("");
   const [tab, setTab] = useState("");
   const [campaignId, setCampaignId] = useState("");
-  const [pollEnabled, setPollEnabled] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [svcEmail, setSvcEmail] = useState<string | null>(null);
 
@@ -51,7 +49,6 @@ export function SheetImportPanel() {
       setSheetUrl(cfgR.sheetUrl ?? "");
       setTab(cfgR.tab ?? "");
       setCampaignId(cfgR.campaignId ?? "");
-      setPollEnabled(cfgR.pollEnabled);
       setSvcEmail(cfgR.serviceAccountEmail);
       setCampaigns(campR.campaigns ?? []);
     })().catch(() => {});
@@ -71,7 +68,6 @@ export function SheetImportPanel() {
             sheetUrl,
             tab: tab || undefined,
             campaignId: campaignId || undefined,
-            pollEnabled,
             runImport,
           }),
         });
@@ -97,7 +93,7 @@ export function SheetImportPanel() {
         setBusy(null);
       }
     },
-    [sheetUrl, tab, campaignId, pollEnabled],
+    [sheetUrl, tab, campaignId],
   );
 
   const test = useCallback(async () => {
@@ -169,18 +165,11 @@ export function SheetImportPanel() {
             </select>
           </label>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={pollEnabled}
-            onChange={(e) => setPollEnabled(e.target.checked)}
-          />
-          <span>
-            Keep importing new rows automatically (the <code>npm run ingest</code>{" "}
-            worker reads the sheet on a loop). Dialing stays separate — start it
-            from the dashboard when you want to call.
-          </span>
-        </label>
+        <p className="text-xs text-muted-foreground">
+          Automatic importing runs in the <code>npm run ingest</code> worker —
+          turn it on/off from the <b>Services</b> panel on the dashboard. Dialing
+          is separate (start it from the dashboard when you want to call).
+        </p>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">

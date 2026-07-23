@@ -57,6 +57,13 @@
       "when": 1784817343406,
       "tag": "0007_talented_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784825109404,
+      "tag": "0008_long_callisto",
+      "breakpoints": true
     }
   ]
 }
