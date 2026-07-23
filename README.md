@@ -1,7 +1,7 @@
-# Transpira GTM
+# GTM Console
 
 Go-to-market tooling for outbound sales. The repo now ships **one unified
-frontend — Transpira GTM** ([`sales_automation/`](./sales_automation)) — a
+frontend — GTM Console** ([`sales_automation/`](./sales_automation)) — a
 Next.js + TypeScript app that puts the whole rep + admin workflow behind a
 single cobalt-railed shell:
 
@@ -19,7 +19,7 @@ standalone use.
 
 ## Quick start
 
-Transpira GTM needs a local Postgres. A `docker-compose.yml` brings one up on
+GTM Console needs a local Postgres. A `docker-compose.yml` brings one up on
 port **5433**.
 
 ```bash

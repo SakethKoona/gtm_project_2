@@ -56,9 +56,9 @@ export function AppShell({
           </div>
           <div className="min-w-0">
             <h1 className="font-display text-lg font-bold leading-tight tracking-tight">
-              Transpira
+              GTM Console
             </h1>
-            <p className="truncate text-[11px] text-white/50">GTM · Sales</p>
+            <p className="truncate text-[11px] text-white/50">Dialer · Pipeline</p>
           </div>
         </div>
 

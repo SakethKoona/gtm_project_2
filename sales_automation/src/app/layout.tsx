@@ -16,7 +16,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Transpira GTM",
+  title: "GTM Console",
   description: "Unified GTM console: dialer, pipeline, and rep call tracking.",
 };
 

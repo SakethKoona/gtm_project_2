@@ -1,4 +1,4 @@
-# Transpira GTM — Unified Frontend
+# GTM Console — Unified Frontend
 
 The one unified frontend for outbound GTM: lead ingestion, a keyboard-driven
 call console, a lead pipeline, and the admin dialer dashboard — all behind a
@@ -28,10 +28,8 @@ Every route lives under the same nav shell:
 
 ### Design system
 
-The app uses the shared **Transpira design system** — Montserrat headings, IBM
-Plex Mono for numerics/labels, a single cobalt accent on quiet white cards — so
-it reads as a sibling of `../platform`, `../build`, and
-[transpiralabs.com](https://transpiralabs.com).
+The app uses a lightweight **design system** — Montserrat headings, IBM Plex Mono
+for numerics/labels, and a single cobalt accent on quiet white cards.
 
 ## Stack (Phase 1)
 
