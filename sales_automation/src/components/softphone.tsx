@@ -50,12 +50,10 @@ export function Softphone() {
         }
         const { Device } = await import("@twilio/voice-sdk");
         if (disposed) return;
-        device = new Device(r.token, {
-          logLevel: "error",
-          // Pin a US signaling edge (fall back to auto) in case roaming selection
-          // is the connection problem.
-          edge: ["ashburn", "roaming"],
-        });
+        // Use the default "roaming" edge (auto-selects the nearest signaling
+        // endpoint). An explicit edge pin can raise ConnectionError 53000 if that
+        // specific edge is unreachable from the rep's network.
+        device = new Device(r.token, { logLevel: "error" });
         deviceRef.current = device;
 
         device.on("registered", () => {
@@ -63,6 +61,8 @@ export function Softphone() {
           setStatus("online");
           setError("");
           heartbeat(true);
+          // Start the periodic presence heartbeat once (survives reconnects).
+          if (!hb) hb = setInterval(() => heartbeat(true), 15000);
         });
         device.on("unregistered", () => {
           if (!disposed) setStatus("offline");
@@ -70,7 +70,13 @@ export function Softphone() {
         device.on("error", (e: { code?: number; message?: string }) => {
           if (disposed) return;
           // Show the code; the SDK auto-reconnects signaling on transient blips.
-          setError(`${e.code ?? ""} ${e.message ?? String(e)}`.trim());
+          console.error("[softphone] device error", e);
+          const detail = `${e?.code ?? ""} ${e?.message ?? ""}`.trim();
+          setError(detail || "Softphone connection error");
+          // Only hard-fail on token/auth errors that won't self-heal. Signaling
+          // errors (53000/31005/31009) are usually transient — the SDK
+          // reconnects and re-emits "registered", so keep showing the last state.
+          if (e?.code === 20101 || e?.code === 20104) setStatus("error");
         });
         device.on("incoming", (call: Call) => {
           call.on("cancel", () => setIncoming(null));
@@ -98,12 +104,35 @@ export function Softphone() {
           if (rr.token) device?.updateToken(rr.token);
         });
 
-        await device.register();
-        hb = setInterval(() => heartbeat(true), 15000);
+        // Register with a few retries so a transient signaling blip (53000) at
+        // startup self-heals instead of leaving the rep offline. The periodic
+        // heartbeat is started by the "registered" handler once we're online.
+        for (let attempt = 1; attempt <= 3 && !disposed; attempt++) {
+          try {
+            await device.register();
+            break;
+          } catch (e) {
+            console.error(`[softphone] register attempt ${attempt} failed`, e);
+            if (attempt === 3 || disposed) throw e;
+            await new Promise((res) => setTimeout(res, 1500 * attempt));
+          }
+        }
       } catch (e) {
         if (!disposed) {
           setStatus("error");
-          setError((e as Error).message);
+          console.error("[softphone] register failed", e);
+          // Twilio SDK rejections aren't always Error instances (some are plain
+          // objects, some undefined) — extract defensively so a connect failure
+          // never crashes the console page.
+          const m =
+            e instanceof Error
+              ? e.message
+              : e && typeof e === "object" && "message" in e
+                ? String((e as { message?: unknown }).message)
+                : String(e ?? "");
+          setError(
+            m || "Couldn't connect the softphone. Check Twilio Voice config.",
+          );
         }
       }
     })();
