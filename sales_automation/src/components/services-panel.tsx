@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, X } from "lucide-react";
+import { Activity, X, FileSpreadsheet, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ServiceView = {
@@ -28,6 +28,10 @@ function dotColor(s: ServiceView): string {
  */
 export function ServicesPanel() {
   const [services, setServices] = useState<ServiceView[]>([]);
+  const [leadSheet, setLeadSheet] = useState<{ url: string | null; tab: string | null }>({
+    url: null,
+    tab: null,
+  });
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -36,7 +40,10 @@ export function ServicesPanel() {
     const load = async () => {
       try {
         const r = await fetch("/api/services").then((x) => x.json());
-        if (active) setServices(r.services ?? []);
+        if (active) {
+          setServices(r.services ?? []);
+          if (r.leadSheet) setLeadSheet(r.leadSheet);
+        }
       } catch {
         /* keep last state */
       }
@@ -113,6 +120,37 @@ export function ServicesPanel() {
             ))}
             {services.length === 0 && (
               <p className="px-1 py-1 text-xs text-muted-foreground">Loading…</p>
+            )}
+          </div>
+
+          {/* Connected Google Sheet (info only) */}
+          <div className="border-t border-border px-3 py-2">
+            {leadSheet.url ? (
+              <a
+                href={leadSheet.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                title={leadSheet.url}
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <span className="truncate">
+                  Sheet synced{leadSheet.tab ? ` · ${leadSheet.tab}` : ""}
+                </span>
+                {(() => {
+                  const n = services.find((s) => s.name === "ingest")?.detail
+                    ?.totalImported;
+                  return typeof n === "number" && n > 0 ? (
+                    <span className="shrink-0">· {n} imported</span>
+                  ) : null;
+                })()}
+                <ExternalLink className="ml-auto h-3 w-3 shrink-0" />
+              </a>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                No sheet linked
+              </div>
             )}
           </div>
         </div>
