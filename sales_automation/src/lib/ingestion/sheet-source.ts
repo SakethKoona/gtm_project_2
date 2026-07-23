@@ -1,7 +1,7 @@
 import type { ColumnMapping } from "@/db/schema";
 import type { BatchSummary, RowResult } from "./types";
 import { validateBatch, commitBatch } from "./service";
-import { assignEligibleLeads } from "@/lib/campaigns/service";
+import { assignBatchLeads } from "@/lib/campaigns/service";
 import {
   readLeadRows,
   writeCells,
@@ -115,7 +115,7 @@ export async function importSheetLeads(params: {
     sheet: { spreadsheetId: extractSpreadsheetId(params.sheetUrl), tab, rowByIndex },
   });
 
-  if (params.campaignId) await assignEligibleLeads(params.campaignId);
+  await assignBatchLeads(batchId, params.campaignId ?? null);
 
   // Best-effort: stamp each processed row's Result so the next pass skips it.
   // Eligible → "Queued" (the dialer overwrites it with the call outcome); others

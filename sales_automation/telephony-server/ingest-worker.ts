@@ -4,7 +4,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 
-import { getLeadSheetConfig } from "../src/lib/settings";
+import { listEnabledLeadSheets } from "../src/lib/lead-sheets";
 import { importSheetLeads } from "../src/lib/ingestion/sheet-source";
 import { heartbeat, isServiceEnabled } from "../src/lib/services";
 
@@ -34,34 +34,41 @@ async function tick(): Promise<void> {
   inFlight = true;
   try {
     const enabled = await isServiceEnabled("ingest");
-    const cfg = await getLeadSheetConfig();
+    const sheets = await listEnabledLeadSheets();
     // Heartbeat every tick (even when paused/idle) so the Services panel shows the
     // process is alive; `enabled` drives whether we actually import.
-    await heartbeat("ingest", {
-      enabled,
-      configured: !!cfg.sheetUrl,
-      totalImported,
-    });
+    await heartbeat("ingest", { enabled, sheets: sheets.length, totalImported });
     if (!enabled) return; // paused from the Services panel
-    if (!cfg.sheetUrl) return; // no sheet configured yet
+    if (sheets.length === 0) return; // no sheets linked yet
 
-    const res = await importSheetLeads({
-      sheetUrl: cfg.sheetUrl,
-      tab: cfg.tab ?? undefined,
-      campaignId: cfg.campaignId ?? undefined,
-      uploadedBy: "ingest-worker",
-    });
-    if (res.imported > 0) {
-      totalImported += res.imported;
-      console.log(
-        `[ingest] ${new Date().toISOString()} — imported ${res.imported} new lead(s) from "${res.tab}" ` +
-          `(${res.summary.duplicates} dup, ${res.summary.invalid} invalid)`,
-      );
+    let importedThisPass = 0;
+    for (const s of sheets) {
+      // Per-sheet try/catch so one bad/unshared sheet doesn't stall the others.
+      try {
+        const res = await importSheetLeads({
+          sheetUrl: s.url,
+          tab: s.tab ?? undefined,
+          campaignId: s.campaignId ?? undefined,
+          uploadedBy: "ingest-worker",
+        });
+        if (res.imported > 0) {
+          importedThisPass += res.imported;
+          totalImported += res.imported;
+          console.log(
+            `[ingest] ${new Date().toISOString()} — imported ${res.imported} lead(s) from ` +
+              `"${s.name ?? res.tab}" (${res.summary.duplicates} dup, ${res.summary.invalid} invalid)`,
+          );
+        }
+      } catch (e) {
+        console.error(`[ingest] sheet "${s.name ?? s.url}" failed:`, (e as Error)?.message ?? e);
+      }
+    }
+    if (importedThisPass > 0) {
       await heartbeat("ingest", {
         enabled,
-        configured: true,
+        sheets: sheets.length,
         totalImported,
-        lastImport: res.imported,
+        lastImport: importedThisPass,
         lastImportAt: new Date().toISOString(),
       });
     }

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConsoleDock } from "@/components/console-dock";
+import { ServicesPanel } from "@/components/services-panel";
 import type { UserRole } from "@/lib/auth/users";
 
 type NavItem = {
@@ -112,8 +113,13 @@ export function AppShell({
       </aside>
       <div className="min-w-0 flex-1">{children}</div>
 
-      {/* Admins get the always-available floating Call Console (no tab switch). */}
-      {role === "admin" && <ConsoleDock />}
+      {/* Admins get the always-available floating Call Console + Services widget. */}
+      {role === "admin" && (
+        <>
+          <ConsoleDock />
+          <ServicesPanel />
+        </>
+      )}
     </div>
   );
 }

@@ -32,17 +32,6 @@ export async function setSetting(key: string, value: string | null): Promise<voi
     });
 }
 
-export type LeadSheetConfig = {
-  sheetUrl: string | null;
-  tab: string | null;
-  campaignId: string | null;
-};
-
-export async function getLeadSheetConfig(): Promise<LeadSheetConfig> {
-  const [sheetUrl, tab, campaignId] = await Promise.all([
-    getSetting(SETTINGS_KEYS.leadSheetUrl),
-    getSetting(SETTINGS_KEYS.leadSheetTab),
-    getSetting(SETTINGS_KEYS.leadSheetCampaignId),
-  ]);
-  return { sheetUrl, tab, campaignId };
-}
+// The legacy single-sheet config (lead_sheet_url/tab/campaign_id) is now migrated
+// into the lead_sheets table on first read — see src/lib/lead-sheets.ts. The keys
+// above are kept only so that migration can find + clear them.

@@ -139,6 +139,33 @@ export async function assignEligibleLeads(campaignId: string, limit = 1000) {
   return eligible.length;
 }
 
+/**
+ * Assign the eligible leads from ONE ingestion batch to a campaign. Scoped to the
+ * batch so that, with multiple sheets importing into different campaigns, a sheet's
+ * leads never get swept into another sheet's campaign (which unscoped
+ * assignEligibleLeads would do). No-op when campaignId is null.
+ */
+export async function assignBatchLeads(
+  batchId: string,
+  campaignId: string | null,
+): Promise<number> {
+  if (!campaignId) return 0;
+  const rows = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(
+      and(
+        eq(leads.ingestionBatchId, batchId),
+        eq(leads.validationStatus, "eligible"),
+        isNull(leads.campaignId),
+      ),
+    );
+  for (const l of rows) {
+    await db.update(leads).set({ campaignId }).where(eq(leads.id, l.id));
+  }
+  return rows.length;
+}
+
 /** Dial-eligible leads currently assigned to a campaign. */
 export async function listCampaignLeads(campaignId: string) {
   return db

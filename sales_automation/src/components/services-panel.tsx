@@ -27,11 +27,9 @@ function dotColor(s: ServiceView): string {
  * card with an enable/pause toggle per service. Polls every 5s.
  */
 export function ServicesPanel() {
+  type LeadSheet = { id: string; name: string | null; url: string; tab: string | null; enabled: boolean };
   const [services, setServices] = useState<ServiceView[]>([]);
-  const [leadSheet, setLeadSheet] = useState<{ url: string | null; tab: string | null }>({
-    url: null,
-    tab: null,
-  });
+  const [leadSheets, setLeadSheets] = useState<LeadSheet[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -42,7 +40,7 @@ export function ServicesPanel() {
         const r = await fetch("/api/services").then((x) => x.json());
         if (active) {
           setServices(r.services ?? []);
-          if (r.leadSheet) setLeadSheet(r.leadSheet);
+          if (r.leadSheets) setLeadSheets(r.leadSheets);
         }
       } catch {
         /* keep last state */
@@ -123,35 +121,37 @@ export function ServicesPanel() {
             )}
           </div>
 
-          {/* Connected Google Sheet (info only) */}
+          {/* Connected Google Sheets (info only) */}
           <div className="border-t border-border px-3 py-2">
-            {leadSheet.url ? (
+            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+              {leadSheets.length > 0
+                ? `${leadSheets.length} sheet${leadSheets.length > 1 ? "s" : ""} synced`
+                : "No sheets linked"}
+              {(() => {
+                const n = services.find((s) => s.name === "ingest")?.detail?.totalImported;
+                return typeof n === "number" && n > 0 ? (
+                  <span className="ml-auto normal-case">{n} imported</span>
+                ) : null;
+              })()}
+            </div>
+            {leadSheets.map((s) => (
               <a
-                href={leadSheet.url}
+                key={s.id}
+                href={s.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                title={leadSheet.url}
+                className={cn(
+                  "mt-1 flex items-center gap-1.5 text-xs hover:text-foreground",
+                  s.enabled ? "text-muted-foreground" : "text-muted-foreground/50",
+                )}
+                title={s.url}
               >
-                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                <span className="truncate">
-                  Sheet synced{leadSheet.tab ? ` · ${leadSheet.tab}` : ""}
-                </span>
-                {(() => {
-                  const n = services.find((s) => s.name === "ingest")?.detail
-                    ?.totalImported;
-                  return typeof n === "number" && n > 0 ? (
-                    <span className="shrink-0">· {n} imported</span>
-                  ) : null;
-                })()}
+                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", s.enabled ? "bg-emerald-500" : "bg-muted-foreground/40")} />
+                <span className="truncate">{s.name || s.tab || "Sheet"}</span>
                 <ExternalLink className="ml-auto h-3 w-3 shrink-0" />
               </a>
-            ) : (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-                No sheet linked
-              </div>
-            )}
+            ))}
           </div>
         </div>
       ) : (

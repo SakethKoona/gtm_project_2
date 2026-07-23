@@ -5,7 +5,7 @@ import {
   setServiceEnabled,
   SERVICES,
 } from "@/lib/services";
-import { getLeadSheetConfig } from "@/lib/settings";
+import { listLeadSheets } from "@/lib/lead-sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const guard = await apiGuard(["admin"]);
   if (!guard.ok) return guard.res;
-  const cfg = await getLeadSheetConfig();
+  const sheets = await listLeadSheets();
   return Response.json({
     services: await listServiceStatus(),
-    leadSheet: { url: cfg.sheetUrl, tab: cfg.tab },
+    leadSheets: sheets.map((s) => ({
+      id: s.id,
+      name: s.name,
+      url: s.url,
+      tab: s.tab,
+      enabled: s.enabled,
+    })),
   });
 }
 

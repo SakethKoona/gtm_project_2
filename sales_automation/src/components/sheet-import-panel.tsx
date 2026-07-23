@@ -1,210 +1,223 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ExternalLink, Trash2, DownloadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
-type Summary = {
-  rowCount: number;
-  eligible: number;
-  quarantined: number;
-  blocked: number;
-  invalid: number;
-  duplicates: number;
-};
 type Campaign = { id: string; name: string };
-type Config = {
-  sheetUrl: string | null;
+type Sheet = {
+  id: string;
+  name: string | null;
+  url: string;
   tab: string | null;
   campaignId: string | null;
-  serviceAccountEmail: string | null;
+  enabled: boolean;
 };
 
 const SELECT_CLASS =
-  "w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
+  "rounded-md border border-input bg-card px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
- * Central Google-Sheet lead source (closed loop). Set the sheet URL + campaign,
- * enable real-time polling, or run a one-off import. New rows (Result="none") are
+ * Central Google Sheets manager (multiple sheets). Each linked sheet is imported
+ * by the always-on ingest worker into its campaign; new rows (Result="none") are
  * validated in B2B mode, dialed, and their Result + Notes written back.
  */
 export function SheetImportPanel() {
-  const [sheetUrl, setSheetUrl] = useState("");
-  const [tab, setTab] = useState("");
-  const [campaignId, setCampaignId] = useState("");
+  const [sheets, setSheets] = useState<Sheet[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [svcEmail, setSvcEmail] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const [busy, setBusy] = useState<null | "test" | "save" | "import">(null);
-  const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [result, setResult] = useState<{ summary: Summary; imported: number; tab: string } | null>(null);
+  // Add-form state
+  const [url, setUrl] = useState("");
+  const [tab, setTab] = useState("");
+  const [name, setName] = useState("");
+  const [campaignId, setCampaignId] = useState("");
 
   useEffect(() => {
+    let active = true;
     (async () => {
-      const [cfgR, campR] = await Promise.all([
-        fetch("/api/ingest/sheet").then((r) => r.json() as Promise<Config>),
+      const [s, c] = await Promise.all([
+        fetch("/api/lead-sheets").then((r) => r.json()),
         fetch("/api/campaigns").then((r) => r.json()),
       ]);
-      setSheetUrl(cfgR.sheetUrl ?? "");
-      setTab(cfgR.tab ?? "");
-      setCampaignId(cfgR.campaignId ?? "");
-      setSvcEmail(cfgR.serviceAccountEmail);
-      setCampaigns(campR.campaigns ?? []);
+      if (!active) return;
+      setSheets(s.sheets ?? []);
+      if (s.serviceAccountEmail) setSvcEmail(s.serviceAccountEmail);
+      setCampaigns(c.campaigns ?? []);
     })().catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const post = useCallback(
-    async (runImport: boolean) => {
-      setBusy(runImport ? "import" : "save");
-      setError(null);
-      setNote(null);
-      setResult(null);
+  const act = useCallback(
+    async (body: Record<string, unknown>, key: string) => {
+      setBusy(key);
+      setMsg(null);
       try {
-        const r = await fetch("/api/ingest/sheet", {
+        const r = await fetch("/api/lead-sheets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sheetUrl,
-            tab: tab || undefined,
-            campaignId: campaignId || undefined,
-            runImport,
-          }),
+          body: JSON.stringify(body),
         });
         const data = await r.json();
         if (!r.ok) {
-          setError(data.error ?? "Request failed");
+          setMsg({ kind: "err", text: data.error ?? "Failed" });
           if (data.serviceAccountEmail) setSvcEmail(data.serviceAccountEmail);
-          return;
+          return null;
         }
-        if (runImport) {
-          setResult({ summary: data.summary, imported: data.imported, tab: data.tab });
-          setNote(
-            data.summary.rowCount === 0
-              ? "No new rows to import (all rows already have a Result)."
-              : `Imported ${data.imported} lead(s) into the queue.`,
-          );
-        } else {
-          setNote("Saved.");
-        }
+        if (data.sheets) setSheets(data.sheets);
+        return data;
       } catch (e) {
-        setError((e as Error).message);
+        setMsg({ kind: "err", text: (e as Error).message });
+        return null;
       } finally {
         setBusy(null);
       }
     },
-    [sheetUrl, tab, campaignId],
+    [],
   );
 
-  const test = useCallback(async () => {
+  const addSheet = async () => {
+    if (!url.trim()) return;
+    const data = await act(
+      { action: "add", url: url.trim(), tab: tab.trim() || undefined, name: name.trim() || undefined, campaignId: campaignId || undefined },
+      "add",
+    );
+    if (data) {
+      setUrl("");
+      setTab("");
+      setName("");
+      setCampaignId("");
+      setMsg({ kind: "ok", text: "Sheet added — the ingest worker will pick it up." });
+    }
+  };
+
+  const importNow = async (id: string) => {
+    const data = await act({ action: "import", id }, `import:${id}`);
+    if (data?.result) {
+      setMsg({ kind: "ok", text: `Imported ${data.result.imported} lead(s).` });
+    }
+  };
+
+  const test = async () => {
+    if (!url.trim()) return;
     setBusy("test");
-    setError(null);
-    setNote(null);
+    setMsg(null);
     try {
       const r = await fetch("/api/sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ping", sheetUrl }),
+        body: JSON.stringify({ action: "ping", sheetUrl: url.trim() }),
       });
       const data = await r.json();
       if (data.serviceAccountEmail) setSvcEmail(data.serviceAccountEmail);
-      if (!r.ok || data.error) setError(data.error ?? "Couldn't reach that sheet.");
-      else setNote("Sheet reachable ✓ (make sure the service account has Editor access).");
-    } catch (e) {
-      setError((e as Error).message);
+      setMsg(
+        !r.ok || data.error
+          ? { kind: "err", text: data.error ?? "Couldn't reach that sheet." }
+          : { kind: "ok", text: "Sheet reachable ✓ (needs Editor access for write-back)." },
+      );
     } finally {
       setBusy(null);
     }
-  }, [sheetUrl]);
+  };
 
   return (
     <section className="rounded-xl border border-border bg-card p-5">
-      <h2 className="text-base font-semibold">Central Google Sheet</h2>
+      <h2 className="text-base font-semibold">Central Google Sheets</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Columns: <b>Name · Company · Phone · Result · Notes</b>. New rows with
-        Result <code>none</code> are imported (B2B), dialed, and the outcome is
-        written back to the row.
+        Link one or more sheets (columns <b>Name · Company · Phone · Result · Notes</b>).
+        New rows with Result <code>none</code> are imported into the sheet&apos;s campaign,
+        dialed, and the outcome written back. Importing runs automatically — toggle the
+        Ingestion worker in the <b>Services</b> widget.
       </p>
       {svcEmail && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Share the sheet (Editor) with <code>{svcEmail}</code>.
+          Share each sheet (Editor) with <code>{svcEmail}</code>.
         </p>
       )}
 
-      <div className="mt-4 grid gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block font-medium">Sheet link</span>
-          <Input
-            value={sheetUrl}
-            onChange={(e) => setSheetUrl(e.target.value)}
-            placeholder="https://docs.google.com/spreadsheets/d/…"
-          />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm">
-            <span className="mb-1 block font-medium">Tab (optional)</span>
-            <Input
-              value={tab}
-              onChange={(e) => setTab(e.target.value)}
-              placeholder="defaults to the first tab"
-            />
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block font-medium">Campaign</span>
-            <select
-              className={SELECT_CLASS}
-              value={campaignId}
-              onChange={(e) => setCampaignId(e.target.value)}
+      {/* Linked sheets */}
+      <div className="mt-4 space-y-2">
+        {sheets.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+            No sheets linked yet — add one below.
+          </p>
+        )}
+        {sheets.map((s) => (
+          <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => act({ action: "update", id: s.id, enabled: !s.enabled }, `en:${s.id}`)}
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                s.enabled ? "bg-emerald-500" : "bg-muted-foreground/30",
+              )}
+              title={s.enabled ? "Enabled — click to pause this sheet" : "Paused"}
             >
-              <option value="">— pick a campaign —</option>
+              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all", s.enabled ? "left-[18px]" : "left-0.5")} />
+            </button>
+            <a href={s.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 text-sm font-medium hover:underline" title={s.url}>
+              <span className="truncate">{s.name || s.tab || "Sheet"}</span>
+              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+            </a>
+            <select
+              className={cn(SELECT_CLASS, "ml-auto")}
+              value={s.campaignId ?? ""}
+              onChange={(e) => act({ action: "update", id: s.id, campaignId: e.target.value || null }, `c:${s.id}`)}
+            >
+              <option value="">no campaign</option>
               {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-          </label>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Automatic importing runs in the <code>npm run ingest</code> worker —
-          turn it on/off from the <b>Services</b> panel on the dashboard. Dialing
-          is separate (start it from the dashboard when you want to call).
-        </p>
+            <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={busy !== null} onClick={() => importNow(s.id)}>
+              <DownloadCloud className="h-3.5 w-3.5" /> {busy === `import:${s.id}` ? "…" : "Import"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => confirm("Remove this sheet? (leads already imported stay)") && act({ action: "delete", id: s.id }, `d:${s.id}`)}
+              className="rounded p-1 text-muted-foreground hover:bg-red-100 hover:text-red-600"
+              title="Remove sheet"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={test} disabled={!sheetUrl || busy !== null}>
-          {busy === "test" ? "Testing…" : "Test"}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => post(false)} disabled={busy !== null}>
-          {busy === "save" ? "Saving…" : "Save"}
-        </Button>
-        <Button size="sm" onClick={() => post(true)} disabled={!sheetUrl || busy !== null}>
-          {busy === "import" ? "Importing…" : "Save & import now"}
-        </Button>
+      {/* Add a sheet */}
+      <div className="mt-4 rounded-lg border border-border p-3">
+        <div className="text-xs font-semibold text-muted-foreground">Add a sheet</div>
+        <div className="mt-2 grid gap-2">
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…" />
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Label (optional)" />
+            <Input value={tab} onChange={(e) => setTab(e.target.value)} placeholder="Tab (optional)" />
+            <select className={cn(SELECT_CLASS, "py-2")} value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
+              <option value="">— campaign —</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={test} disabled={!url.trim() || busy !== null}>
+              {busy === "test" ? "Testing…" : "Test"}
+            </Button>
+            <Button size="sm" onClick={addSheet} disabled={!url.trim() || busy !== null}>
+              {busy === "add" ? "Adding…" : "Add sheet"}
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      {note && !error && <p className="mt-3 text-sm text-emerald-700">{note}</p>}
-
-      {result && (
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
-          {(
-            [
-              ["Rows", result.summary.rowCount],
-              ["Eligible", result.summary.eligible],
-              ["Duplicate", result.summary.duplicates],
-              ["Invalid", result.summary.invalid],
-              ["Blocked", result.summary.blocked],
-              ["Quarantined", result.summary.quarantined],
-            ] as const
-          ).map(([label, n]) => (
-            <div key={label} className="rounded-lg border border-border bg-secondary/40 p-2">
-              <div className="text-lg font-semibold">{n}</div>
-              <div className="text-xs text-muted-foreground">{label}</div>
-            </div>
-          ))}
-        </div>
+      {msg && (
+        <p className={cn("mt-3 text-sm", msg.kind === "ok" ? "text-emerald-700" : "text-red-600")}>{msg.text}</p>
       )}
     </section>
   );

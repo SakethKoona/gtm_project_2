@@ -484,6 +484,24 @@ export const appSettings = pgTable("app_settings", {
 });
 
 /**
+ * lead_sheets — the set of central Google Sheets the ingester reads. Multiple are
+ * supported: the ingest worker imports every `enabled` one on each pass, each into
+ * its own campaign. Write-back keys off the per-lead sourceSheetId/Tab, so results
+ * always land in the right sheet regardless of how many are connected.
+ */
+export const leadSheets = pgTable("lead_sheets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"), // friendly label (optional; falls back to the tab/url)
+  url: text("url").notNull(),
+  tab: text("tab"), // null ⇒ first tab
+  campaignId: uuid("campaign_id"),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
  * service_status — liveness + desired on/off for the standalone worker processes
  * (ingest, telephony), surfaced in the admin "Services" panel.
  *  - `heartbeatAt`: each worker upserts this every loop; the UI shows "alive" when

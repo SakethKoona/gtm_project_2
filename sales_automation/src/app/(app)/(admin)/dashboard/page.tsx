@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Phone, Users, PhoneCall, Radio, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ServicesPanel } from "@/components/services-panel";
 
 type Campaign = { id: string; name: string; overdialRatio: string };
 type Rep = {
@@ -318,8 +317,6 @@ export default function Dashboard() {
           <Btn onClick={startRealDialing} primary>📞 Start real dialing</Btn>
         </div>
       </div>
-
-      <ServicesPanel />
 
       {!snap && (
         <p className="mt-8 text-sm text-muted-foreground">
